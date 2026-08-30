@@ -648,7 +648,11 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 setStatus(`Uploading gallery video ${uploaded.length + 1} of ${pendingGalleryFiles.length}…`);
             }
-            const path = `performance-gallery/${documentId}/${Date.now()}-${fileName}`;
+            // Gallery assets share the approved performance-highlights prefix.
+            // The site's current Firebase Storage policy already allows admins to
+            // write there, while a new top-level performance-gallery prefix is
+            // denied by that policy.
+            const path = `performance-highlights/${documentId}/gallery-${Date.now()}-${fileName}`;
             const snapshot = await storage.ref(path).put(blob, { contentType: mimeType, cacheControl: "public,max-age=31536000,immutable" });
             uploaded.push({
                 id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
