@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Manage Team | KMC Samulnori</title>
-    <link rel="stylesheet" href="../css/admin.css?v=20260725p3a">
+    <link rel="stylesheet" href="../css/admin.css?v=20260829team">
     <link rel="stylesheet" href="../css/admin-mobile-polish.css?v=20260725p3a">
 </head>
 <body data-admin-page="team">
@@ -36,39 +36,39 @@
             <section class="admin-panel team-editor-panel">
                 <div class="admin-panel-heading">
                     <div>
-                        <p class="admin-eyebrow">Public Team Page</p>
                         <h2>Instructor</h2>
                     </div>
                 </div>
 
                 <div class="team-editor-grid">
                     <div class="admin-field">
-                        <label for="instructor-name">Teacher’s name</label>
+                        <label for="instructor-name">English Name</label>
                         <input id="instructor-name" name="instructorName" type="text" required>
                     </div>
                     <div class="admin-field">
-                        <label for="instructor-korean-name">Korean name</label>
+                        <label for="instructor-korean-name">Korean Name</label>
                         <input id="instructor-korean-name" name="instructorKoreanName" type="text">
                     </div>
                 </div>
 
-                <div class="admin-field">
-                    <label for="teacher-message-ko">Teacher’s message (Korean)</label>
-                    <div id="teacher-message-ko" data-rich-editor aria-label="Teacher’s message in Korean"></div>
-                    <p class="admin-help-text">Separate paragraphs with a blank line.</p>
-                </div>
+                <div class="team-teacher-message-grid">
+                    <div class="admin-field">
+                        <label for="teacher-message-ko">Teacher’s message (Korean)</label>
+                        <div id="teacher-message-ko" data-rich-editor aria-label="Teacher’s message in Korean"></div>
+                        <p class="admin-help-text">Separate paragraphs with a blank line.</p>
+                    </div>
 
-                <div class="admin-field">
-                    <label for="teacher-message-en">Teacher’s message (English)</label>
-                    <div id="teacher-message-en" data-rich-editor aria-label="Teacher’s message in English"></div>
-                    <p class="admin-help-text">Separate paragraphs with a blank line.</p>
+                    <div class="admin-field">
+                        <label for="teacher-message-en">Teacher’s message (English)</label>
+                        <div id="teacher-message-en" data-rich-editor aria-label="Teacher’s message in English"></div>
+                        <p class="admin-help-text">Separate paragraphs with a blank line.</p>
+                    </div>
                 </div>
             </section>
 
             <section class="admin-panel team-editor-panel">
                 <div class="admin-panel-heading team-members-heading">
                     <div>
-                        <p class="admin-eyebrow">Public Team Page</p>
                         <h2>Members</h2>
                     </div>
                     <button id="add-member" class="admin-secondary-button" type="button">Add Member</button>
@@ -77,7 +77,8 @@
                 <div id="member-editor-list" class="member-editor-list"></div>
             </section>
 
-            <div class="team-save-bar">
+            <div class="team-save-bar" aria-hidden="true" inert>
+                <div class="team-save-notice"><span class="team-save-mark" aria-hidden="true">KMC</span><p>Your changes are not saved. Press the button to save changes.</p></div>
                 <p id="team-status" class="login-status" role="status" aria-live="polite"></p>
                 <button id="save-team" class="admin-submit" type="submit">Save Team Page</button>
             </div>
@@ -110,7 +111,7 @@
                 <input class="member-age" type="number" min="1" max="120" inputmode="numeric" required>
             </div>
             <div class="admin-field">
-                <label>Years of service</label>
+                <label>Service</label>
                 <input class="member-service" type="text" placeholder="Example: ~2 years">
             </div>
         </div>
@@ -122,7 +123,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
 <script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260725p3a"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
 
-<script src="../js/admin-team.js?v=20260725p3a"></script>
+<script src="../js/admin-team.js?v=20260829team"></script>
 
 </body>
 </html>

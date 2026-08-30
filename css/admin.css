@@ -1646,6 +1646,12 @@ html {
     margin-bottom: 20px;
 }
 
+.team-teacher-message-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
 .admin-field textarea {
     width: 100%;
     min-height: 180px;
@@ -1700,29 +1706,73 @@ html {
 }
 
 .team-save-bar {
-    position: sticky;
-    bottom: 18px;
-    z-index: 10;
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: max(16px, env(safe-area-inset-left));
+    z-index: 1000;
+    width: min(960px, calc(100% - 32px));
+    margin: 0 auto;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 20px;
-    padding: 14px;
+    gap: 16px;
+    padding: 14px 18px;
     border: 1px solid rgba(255, 255, 255, 0.72);
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.86);
     box-shadow: 0 18px 50px rgba(41, 28, 28, 0.12);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(calc(100% + 32px));
+    transition: opacity 240ms ease, transform 360ms var(--admin-motion-spring, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.team-save-bar.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
 }
 
 .team-save-bar .login-status {
+    display: none;
+}
+
+.team-save-bar .login-status:not(:empty) {
+    display: block;
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.team-save-notice {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 12px;
     margin-right: auto;
+}
+
+.team-save-notice p {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 0.9rem;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.team-save-mark {
+    flex: 0 0 auto;
+    color: var(--admin-maroon);
+    font-size: 0.86rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
 }
 
 @media (max-width: 760px) {
     .team-editor-grid,
-    .team-member-fields {
+    .team-member-fields,
+    .team-teacher-message-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1735,6 +1785,10 @@ html {
     .team-save-bar .admin-submit,
     .team-members-heading .admin-secondary-button {
         width: 100%;
+    }
+
+    .team-save-notice {
+        align-items: flex-start;
     }
 }
 
@@ -2264,3 +2318,59 @@ body.home-section-sorting * {
 .information-save { justify-self: start; }
 .site-footer-message { text-align: center; margin: 0 auto 18px; max-width: 760px; }
 @media (max-width: 820px) { .information-logo-grid,.information-footer-grid { grid-template-columns: 1fr; } .information-admin-link-row { grid-template-columns: 1fr; } .information-admin-link-row .admin-link-remove { justify-self: start; } .information-section-editor-header { align-items: flex-start; flex-direction: column; } }
+
+/* ========================================
+   TEAM EDITOR — DARK MODE
+======================================== */
+@media (prefers-color-scheme: dark) {
+    .team-editor-panel .rich-editor {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: #18181b;
+        color: var(--admin-text);
+    }
+
+    .team-editor-panel .rich-editor-toolbar {
+        border-color: rgba(255, 255, 255, 0.11);
+        background: #252529;
+    }
+
+    .team-editor-panel .rich-editor-toolbar button {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--admin-text);
+    }
+
+    .team-editor-panel .rich-editor-toolbar button:hover {
+        border-color: #e38a9c;
+        color: #f4a3b4;
+    }
+
+    .team-editor-panel .rich-editor-surface {
+        background: #18181b;
+        color: var(--admin-text);
+        color-scheme: dark;
+    }
+
+    .team-editor-panel .rich-editor-surface a {
+        color: #f0a2b2;
+    }
+
+    .member-editor-card {
+        border-color: rgba(255, 255, 255, 0.11);
+        background: transparent;
+    }
+
+    .team-save-bar {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(31, 31, 35, 0.94);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+    }
+
+    .team-save-notice p {
+        color: var(--admin-text);
+    }
+
+    .team-save-mark {
+        color: #e38a9c;
+    }
+}

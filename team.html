@@ -2,128 +2,125 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Manage Team | KMC Samulnori</title>
-    <link rel="stylesheet" href="../css/admin.css?v=20260829team">
-    <link rel="stylesheet" href="../css/admin-mobile-polish.css?v=20260725p3a">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Meet Our Team | KMC Samulnori</title>
+    <meta name="description" content="Meet the instructor and members of KMC Samulnori.">
+    <meta name="theme-color" content="#ffffff">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="//www.gstatic.com">
+    <link rel="dns-prefetch" href="//firestore.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css?v=20260829info">
+    <link rel="stylesheet" href="css/team.css?v=20260725p2e">
 </head>
-<body data-admin-page="team">
-<div class="admin-shell">
-    <header class="admin-topbar admin-site-header">
-        <a class="admin-brand" href="../index.html" aria-label="KMC Samulnori home">
-            <img src="../assets/logo/full.webp" alt="KMC Samulnori">
+<body class="team-page">
+
+<header class="navbar" id="navbar">
+    <nav class="nav-container" aria-label="Main navigation">
+        <a href="index.html" class="logo" aria-label="KMC Samulnori home">
+            <picture>
+                <source media="(max-width: 600px)" srcset="assets/logo/circle.webp">
+                <img src="assets/logo/full.webp" alt="KMC Samulnori Logo">
+            </picture>
         </a>
-        <nav class="admin-nav" aria-label="Admin navigation">
-            <a href="dashboard.html" data-admin-page="dashboard">Dashboard</a><a href="home.html" data-admin-page="home-sections">Home Page</a>
-            <a href="performances.html" data-admin-page="performances">Performances</a>
-                <a href="arrangements.html" data-admin-page="arrangements">Arrangements</a>
-            <a href="team.html" data-admin-page="team">Team</a><a href="information.html" data-admin-page="information">Information</a>
-        </nav>
-    </header>
 
-    <div id="team-loading" class="dashboard-loading">Verifying administrator access…</div>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="performances.html">Performances</a></li>
+            <li><a href="arrangements.html">Arrangements</a></li>
+            <li><a href="team.html" class="active" aria-current="page">Team</a></li>
+            <li><a href="information.html">Information</a></li>
+            <li><a href="admin/login.html">Admin Login</a></li>
+        </ul>
 
-    <main id="team-admin" class="admin-dashboard-main" hidden>
-        <div class="admin-dashboard-header">
-            <div><h1>Team</h1></div>
-            <div class="admin-user-meta">
-                <span id="admin-user-email"></span>
-                <button id="admin-logout" class="admin-logout" type="button">Sign Out</button>
-            </div>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-menu">
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+    <div class="mobile-menu" id="mobile-menu">
+        <a href="index.html">Home</a>
+        <a href="performances.html">Performances</a>
+        <a href="arrangements.html">Arrangements</a>
+        <a href="team.html" class="active" aria-current="page">Team</a>
+        <a href="information.html">Information</a>
+        <a href="admin/login.html">Admin Login</a>
+    </div>
+</header>
+
+<main>
+    <section class="team-hero section" aria-labelledby="team-page-title">
+        <div class="section-container">
+            <header class="team-page-header reveal">
+                <h1 id="team-page-title">Meet Our Team</h1>
+            </header>
         </div>
+    </section>
 
-        <form id="team-form" class="team-admin-form">
-            <section class="admin-panel team-editor-panel">
-                <div class="admin-panel-heading">
-                    <div>
-                        <h2>Instructor</h2>
-                    </div>
+    <section class="instructor-section" aria-labelledby="instructor-title">
+        <div class="section-container">
+            <article class="instructor-layout reveal">
+                <div class="instructor-photo-wrap">
+                    <img src="assets/team/instructor.webp" alt="KMC Samulnori instructor Susanna Hong" class="instructor-photo" loading="lazy" decoding="async">
                 </div>
 
-                <div class="team-editor-grid">
-                    <div class="admin-field">
-                        <label for="instructor-name">English Name</label>
-                        <input id="instructor-name" name="instructorName" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="instructor-korean-name">Korean Name</label>
-                        <input id="instructor-korean-name" name="instructorKoreanName" type="text">
-                    </div>
-                </div>
+                <div class="instructor-copy">
+                    <p class="team-eyebrow">Instructor</p>
+                    <h2 id="instructor-title">Susanna Hong</h2>
+                    <p id="instructor-korean-name" class="instructor-korean">홍수잔나</p>
 
-                <div class="team-teacher-message-grid">
-                    <div class="admin-field">
-                        <label for="teacher-message-ko">Teacher’s message (Korean)</label>
-                        <div id="teacher-message-ko" data-rich-editor aria-label="Teacher’s message in Korean"></div>
-                        <p class="admin-help-text">Separate paragraphs with a blank line.</p>
-                    </div>
-
-                    <div class="admin-field">
-                        <label for="teacher-message-en">Teacher’s message (English)</label>
-                        <div id="teacher-message-en" data-rich-editor aria-label="Teacher’s message in English"></div>
-                        <p class="admin-help-text">Separate paragraphs with a blank line.</p>
+                    <div id="teacher-message" class="teacher-message" aria-live="polite">
+                        <h3>Teacher’s Message (Ko)</h3>
+                        <div id="teacher-message-ko"></div>
+                        <h3>Teacher’s Message (En)</h3>
+                        <div id="teacher-message-en"></div>
                     </div>
                 </div>
-            </section>
-
-            <section class="admin-panel team-editor-panel">
-                <div class="admin-panel-heading team-members-heading">
-                    <div>
-                        <h2>Members</h2>
-                    </div>
-                    <button id="add-member" class="admin-secondary-button" type="button">Add Member</button>
-                </div>
-
-                <div id="member-editor-list" class="member-editor-list"></div>
-            </section>
-
-            <div class="team-save-bar" aria-hidden="true" inert>
-                <div class="team-save-notice"><span class="team-save-mark" aria-hidden="true">KMC</span><p>Your changes are not saved. Press the button to save changes.</p></div>
-                <p id="team-status" class="login-status" role="status" aria-live="polite"></p>
-                <button id="save-team" class="admin-submit" type="submit">Save Team Page</button>
-            </div>
-        </form>
-    </main>
-
-    <footer class="admin-public-footer">
-        <div class="admin-footer-container">
-            <div class="admin-footer-logo"><img src="../assets/logo/full.webp" alt="KMC Samulnori Logo"></div>
-            <div class="admin-footer-contact"><p>Contact: <a href="mailto:kmc-samulnori@gmail.com">kmc-samulnori@gmail.com</a></p></div>
-            <div class="admin-footer-bottom"><p>© 2026 KMC Samulnori. All Rights Reserved.</p></div>
+            </article>
         </div>
-    </footer>
-</div>
+    </section>
 
-<template id="member-editor-template">
-    <article class="member-editor-card">
-        <button class="member-drag-handle" draggable="true" type="button" title="Drag to reorder" aria-label="Drag member to reorder"><span></span><span></span><span></span></button>
-        <div class="member-editor-card-header">
-            <h3>Member <span class="member-number"></span></h3>
-            <button class="admin-danger-button admin-small-button remove-member" type="button">Remove</button>
-        </div>
-        <div class="team-editor-grid team-member-fields">
-            <div class="admin-field">
-                <label>Name</label>
-                <input class="member-name" type="text" required>
-            </div>
-            <div class="admin-field">
-                <label>Age</label>
-                <input class="member-age" type="number" min="1" max="120" inputmode="numeric" required>
-            </div>
-            <div class="admin-field">
-                <label>Service</label>
-                <input class="member-service" type="text" placeholder="Example: ~2 years">
+    <section class="members-section" aria-labelledby="members-title">
+        <div class="section-container">
+            <header class="members-header reveal">
+                <h2 id="members-title">Members</h2>
+            </header>
+
+            <!-- Replace each placeholder image and member detail below when final information is available. -->
+            <div id="members-grid" class="members-grid" aria-live="polite">
+                <p class="team-loading-message">Loading team members…</p>
             </div>
         </div>
-    </article>
-</template>
+    </section>
+</main>
 
-<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
-<script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260725p3a"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
+<footer class="footer">
+    <div class="footer-container">
+        <div class="footer-logo">
+            <img src="assets/logo/full.webp" alt="KMC Samulnori Logo">
+        </div>
+        <div class="footer-contact">
+            <p>Contact: <a href="mailto:kmc-samulnori@gmail.com">kmc-samulnori@gmail.com</a></p>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2026 KMC Samulnori. All Rights Reserved.</p>
+        </div>
+    </div>
+</footer>
 
-<script src="../js/admin-team.js?v=20260829team"></script>
+<script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+<script defer src="js/public.bundle.js?v=20260725p3e"></script><script defer src="js/site-information.js?v=20260829info2"></script>
 
+
+
+<script defer src="js/team.js?v=20260725p3d"></script>
 </body>
 </html>
