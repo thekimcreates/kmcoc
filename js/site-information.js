@@ -1,6 +1,7 @@
 "use strict";
 
 (() => {
+  let lastLoaded = null;
   const FALLBACK = Object.freeze({
     circleLogoUrl: "",
     fullLogoUrl: "",
@@ -121,24 +122,31 @@
     return info;
   }
 
+  function completeLoad(data) {
+    const info = apply(data);
+    lastLoaded = info;
+    document.dispatchEvent(new CustomEvent('kmc:site-information-loaded', { detail: info }));
+    return info;
+  }
+
   async function load({ force = false } = {}) {
     const store = window.KMCDataStore;
     const cached = !force && store?.cachedValue?.('site-information');
     if (cached) apply(cached);
     const db = window.kmcFirebase?.db;
-    if (!db) return apply(cached || FALLBACK);
+    if (!db) return completeLoad(cached || FALLBACK);
     try {
       const snap = await db.collection('siteContent').doc('information').get();
       const data = snap.exists ? normalize(snap.data()) : FALLBACK;
       store?.writeCache?.('site-information', data);
-      return apply(data);
+      return completeLoad(data);
     } catch (error) {
       console.warn('Site information could not be refreshed:', error);
-      return apply(cached || FALLBACK);
+      return completeLoad(cached || FALLBACK);
     }
   }
 
-  window.KMCSiteInformation = Object.freeze({ load, apply, normalize, fallback: FALLBACK });
+  window.KMCSiteInformation = Object.freeze({ load, apply, normalize, fallback: FALLBACK, getLastLoaded: () => lastLoaded });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => load());
   else load();
 })();

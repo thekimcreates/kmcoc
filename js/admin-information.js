@@ -11,7 +11,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("information-form");
   const status = document.getElementById("information-status");
   const save = document.getElementById("save-information");
-  const pageIntro = document.getElementById("information-page-intro");
   const sectionsEditor = document.getElementById("information-sections-editor");
   const addSection = document.getElementById("add-information-section");
   const redirect = () => location.replace("login.html");
@@ -32,7 +31,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("footer-message").value = current.footer.message;
     document.getElementById("show-contact").checked = current.footer.showContact;
     document.getElementById("show-footer-logo").checked = current.footer.showLogo;
-    pageIntro.value = current.publicPage.intro;
     renderPublicPageEditor(current.publicPage.sections);
     setPreview("circle", current.circleLogoUrl || "../assets/logo/circle.webp");
     setPreview("full", current.fullLogoUrl || "../assets/logo/full.webp");
@@ -123,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function readPublicPage() {
     return {
-      intro: pageIntro.value.trim(),
       sections: [...sectionsEditor.querySelectorAll(".information-section-editor")].map(card => ({
         title: card.querySelector(".information-section-title").value.trim(),
         text: card.querySelector(".information-section-text").value.trim(),
@@ -152,8 +149,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       setStatus(`Preparing ${kind} logo…`);
       const result = await optimizer.optimize(file, kind === "circle"
-        ? { maxWidth: 900, maxHeight: 900, quality: 0.9 }
-        : { maxWidth: 2200, maxHeight: 900, quality: 0.9 });
+        ? { maxWidth: 900, maxHeight: 900, quality: 0.9, preserveTransparency: true }
+        : { maxWidth: 2200, maxHeight: 900, quality: 0.9, preserveTransparency: true });
       pending[kind] = result;
       setPreview(kind, URL.createObjectURL(result.blob));
       document.getElementById(`${kind}-logo-note`).textContent = optimizer.summary(result);

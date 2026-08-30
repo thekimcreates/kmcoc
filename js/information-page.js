@@ -2,7 +2,6 @@
 
 (() => {
   const page = document.getElementById("information-page");
-  const intro = document.getElementById("information-intro");
   const sections = document.getElementById("information-sections");
 
   function isSafeLink(url) {
@@ -29,7 +28,6 @@
 
   function render(data) {
     const content = window.KMCSiteInformation.normalize(data).publicPage;
-    intro.textContent = content.intro;
     sections.replaceChildren();
 
     content.sections.forEach((section, index) => {
@@ -60,6 +58,7 @@
     page.hidden = false;
   }
 
-  document.addEventListener("kmc:site-information-applied", event => render(event.detail));
-  render(window.KMCSiteInformation?.fallback || {});
+  document.addEventListener("kmc:site-information-loaded", event => render(event.detail));
+  const alreadyLoaded = window.KMCSiteInformation?.getLastLoaded?.();
+  if (alreadyLoaded) render(alreadyLoaded);
 })();

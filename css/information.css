@@ -1,13 +1,10 @@
-.information-page { background: var(--background); }
-.information-hero { padding: 195px 0 72px; background: radial-gradient(circle at 14% 20%, rgba(201, 162, 7, .15), transparent 31%), radial-gradient(circle at 84% 5%, rgba(139, 0, 0, .12), transparent 33%); }
-.information-page-header { max-width: 790px; margin: 0 auto; text-align: center; }
-.information-eyebrow { margin: 0 0 14px; color: var(--kmc-primary); font-size: .78rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-.information-page-header h1 { margin: 0; color: var(--text); font-size: clamp(3rem, 8vw, 5.5rem); font-weight: 800; letter-spacing: -.065em; line-height: .95; }
-.information-intro { max-width: 650px; margin: 26px auto 0; color: var(--secondary-text); font-size: clamp(1.05rem, 2.2vw, 1.3rem); line-height: 1.7; }
-.information-content { padding-top: 30px; }
+.information-page { min-height: 100vh; overflow-x: hidden; background: var(--background); }
+.information-page .information-hero { padding-top: 190px; padding-bottom: 44px; }
+.information-page-header { max-width: 900px; }
+.information-page-header h1 { margin: 0; color: var(--text); font-size: clamp(3.5rem, 9vw, 7.5rem); font-weight: 800; letter-spacing: -.075em; line-height: .94; }
+.information-content { padding-top: 24px; }
 .information-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .information-card { position: relative; min-height: 260px; padding: clamp(28px, 4vw, 46px); overflow: hidden; border: 1px solid rgba(127, 127, 127, .18); border-radius: 30px; background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(245,245,247,.74)); box-shadow: 0 20px 50px rgba(0,0,0,.06); }
-.information-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: linear-gradient(90deg, var(--kmc-primary), var(--kmc-secondary)); }
 .information-card h2 { margin: 0 0 16px; color: var(--text); font-size: clamp(1.45rem, 3vw, 2rem); letter-spacing: -.045em; line-height: 1.1; }
 .information-card p { margin: 0; color: var(--secondary-text); font-size: 1rem; line-height: 1.7; }
 .information-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
@@ -16,5 +13,5 @@
 .information-link:hover, .information-link:focus-visible { background: var(--kmc-primary); color: #fff; transform: translateY(-2px); }
 .information-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (prefers-color-scheme: dark) { .information-card { background: linear-gradient(145deg, rgba(34,34,36,.94), rgba(22,22,23,.9)); border-color: rgba(255,255,255,.12); } .information-link { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.2); } }
-@media (max-width: 900px) { .information-hero { padding: 145px 0 52px; } .information-sections { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .information-page .information-hero { padding-top: 145px; padding-bottom: 38px; } .information-sections { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .information-link { transition: none; } }

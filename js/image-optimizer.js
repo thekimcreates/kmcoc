@@ -78,6 +78,10 @@
   }
 
   async function exportCanvas(canvas, settings) {
+    if (settings.preserveTransparency) {
+      const png = await canvasToBlob(canvas, "image/png");
+      if (png && png.size > 0) return { blob: png, extension: "png", contentType: "image/png" };
+    }
     let blob = await canvasToBlob(canvas, "image/webp", settings.quality);
     if (blob && blob.size > 0 && blob.type === "image/webp") {
       return { blob, extension: "webp", contentType: "image/webp" };
@@ -122,10 +126,12 @@
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext("2d", { alpha: false });
+    const context = canvas.getContext("2d", { alpha: Boolean(settings.preserveTransparency) });
     if (!context) throw new Error("Image optimization is not supported by this browser.");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
+    if (!settings.preserveTransparency) {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+    }
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, width, height);
