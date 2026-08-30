@@ -1639,7 +1639,12 @@ html {
     width: 100%;
 }
 
-.team-hero-editor {
+body[data-admin-page="team"] .admin-user-meta {
+    border: 0;
+    background: transparent;
+}
+
+.team-image-editor {
     display: grid;
     grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
     gap: 22px;
@@ -1651,7 +1656,7 @@ html {
     background: rgba(127, 127, 127, 0.04);
 }
 
-.team-hero-editor > img {
+.team-image-editor > img {
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
@@ -1659,8 +1664,10 @@ html {
     background: var(--admin-bg, #ece9e5);
 }
 
-.team-hero-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.team-hero-editor-actions .admin-help-text { width: 100%; margin: 0; }
+.team-image-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.team-image-editor-actions .admin-submit { display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+.team-image-editor-actions .admin-help-text { width: 100%; margin: 0; }
+.team-teacher-image-editor { margin-bottom: 28px; }
 
 .team-editor-grid {
     display: grid;
@@ -1674,6 +1681,8 @@ html {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
 }
+
+.team-teacher-message-grid .admin-field { gap: 4px; }
 
 .admin-field textarea {
     width: 100%;
@@ -1784,13 +1793,45 @@ html {
     line-height: 1.35;
 }
 
-.team-save-mark {
-    flex: 0 0 auto;
-    color: var(--admin-maroon);
-    font-size: 0.86rem;
-    font-weight: 900;
-    letter-spacing: 0.08em;
+.team-save-notice p.is-saved { color: #23653b; }
+
+.team-revert-button {
+    min-height: 46px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: #1d1d1f;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 750;
+    cursor: pointer;
 }
+
+.team-revert-button:hover,
+.team-revert-button:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.team-revert-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+.team-save-spinner {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.42);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: team-save-spin 0.75s linear infinite;
+}
+
+.team-save-bar .admin-submit.is-saving,
+.team-save-bar .admin-submit.is-saved {
+    display: inline-grid;
+    width: 52px;
+    min-width: 52px;
+    padding: 0;
+    place-items: center;
+}
+
+.team-save-bar .admin-submit.is-saved { font-size: 1.35rem; }
+@keyframes team-save-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 760px) {
     .team-editor-grid,
@@ -1806,6 +1847,7 @@ html {
     }
 
     .team-save-bar .admin-submit,
+    .team-revert-button,
     .team-members-heading .admin-secondary-button {
         width: 100%;
     }
@@ -1814,7 +1856,7 @@ html {
         align-items: flex-start;
     }
 
-    .team-hero-editor { grid-template-columns: 1fr; }
+    .team-image-editor { grid-template-columns: 1fr; }
 }
 
 /* ========================================
@@ -2348,7 +2390,7 @@ body.home-section-sorting * {
    TEAM EDITOR — DARK MODE
 ======================================== */
 @media (prefers-color-scheme: dark) {
-    .team-hero-editor { background: transparent; }
+    .team-image-editor { background: transparent; }
     .team-editor-panel .rich-editor {
         border-color: rgba(255, 255, 255, 0.14);
         background: #18181b;
@@ -2396,7 +2438,6 @@ body.home-section-sorting * {
         color: var(--admin-text);
     }
 
-    .team-save-mark {
-        color: #e38a9c;
-    }
+    .team-save-notice p.is-saved { color: #7be09a; }
+    .team-revert-button { color: var(--admin-text); }
 }
