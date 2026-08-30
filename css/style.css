@@ -813,6 +813,10 @@ button {
     transition-delay: 0.23s;
 }
 
+.mobile-menu.open a:nth-child(6) {
+    transition-delay: 0.27s;
+}
+
 
 /* Admin sign-in link */
 

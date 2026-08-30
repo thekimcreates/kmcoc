@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information | KMC Samulnori</title>
+    <meta name="description" content="Information, opportunities, and helpful links from KMC Samulnori.">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="//www.gstatic.com">
+    <link rel="dns-prefetch" href="//firestore.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260829info">
+    <link rel="stylesheet" href="css/information.css?v=20260829info">
+</head>
+<body class="information-page">
+<header class="navbar" id="navbar">
+    <nav class="nav-container" aria-label="Main navigation">
+        <a href="index.html" class="logo" aria-label="KMC Samulnori home"><picture><source media="(max-width: 600px)" srcset="assets/logo/circle.webp"><img src="assets/logo/full.webp" alt="KMC Samulnori Logo"></picture></a>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="performances.html">Performances</a></li>
+            <li><a href="arrangements.html">Arrangements</a></li>
+            <li><a href="team.html">Team</a></li>
+            <li><a href="information.html" class="active" aria-current="page">Information</a></li>
+            <li><a href="admin/login.html">Admin Login</a></li>
+        </ul>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-menu"><span></span><span></span></button>
+    </nav>
+    <div class="mobile-menu" id="mobile-menu">
+        <a href="index.html">Home</a><a href="performances.html">Performances</a><a href="arrangements.html">Arrangements</a><a href="team.html">Team</a><a href="information.html" class="active" aria-current="page">Information</a><a href="admin/login.html">Admin Login</a>
+    </div>
+</header>
+<main id="information-page" hidden>
+    <section class="information-hero section" aria-labelledby="information-page-title">
+        <div class="section-container"><header class="information-page-header reveal"><p class="information-eyebrow">KMC Samulnori</p><h1 id="information-page-title">Information</h1><p id="information-intro" class="information-intro"></p></header></div>
+    </section>
+    <section class="information-content section" aria-label="Information and useful links"><div class="section-container"><div id="information-sections" class="information-sections" aria-live="polite"></div></div></section>
+</main>
+<footer class="footer"><div class="footer-container"><div class="footer-logo"><img src="assets/logo/full.webp" alt="KMC Samulnori Logo"></div><div class="footer-contact"><p>Contact: <a href="mailto:kmc-samulnori@gmail.com">kmc-samulnori@gmail.com</a></p></div><div class="footer-bottom"><p>© 2026 KMC Samulnori. All Rights Reserved.</p></div></div></footer>
+<script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+<script defer src="js/public.bundle.js?v=20260725p3e"></script><script defer src="js/site-information.js?v=20260829info"></script><script defer src="js/information-page.js?v=20260829info"></script>
+</body>
+</html>

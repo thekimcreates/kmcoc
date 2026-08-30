@@ -11,11 +11,42 @@
       message: "",
       showContact: true,
       showLogo: true
+    },
+    publicPage: {
+      intro: "Find ways to connect with KMC Samulnori, learn about our community, and stay involved.",
+      sections: [
+        {
+          title: "Join the Rhythm",
+          text: "Interested in learning Korean traditional percussion or performing with us? We welcome new members and volunteers of all experience levels.",
+          links: [{ label: "Contact us about joining", url: "mailto:kmc-samulnori@gmail.com?subject=KMC%20Samulnori%20Team%20Interest" }]
+        },
+        {
+          title: "Stay Connected",
+          text: "Follow our upcoming performances, share our work with your community, or contact us with a collaboration idea.",
+          links: []
+        }
+      ]
     }
   });
 
+  function normalizeLink(link = {}) {
+    return {
+      label: String(link.label || "Learn more"),
+      url: String(link.url || "")
+    };
+  }
+
+  function normalizePublicSection(section = {}) {
+    return {
+      title: String(section.title || "Untitled section"),
+      text: String(section.text || ""),
+      links: Array.isArray(section.links) ? section.links.map(normalizeLink) : []
+    };
+  }
+
   function normalize(data = {}) {
     const footer = data.footer || {};
+    const publicPage = data.publicPage || {};
     return {
       circleLogoUrl: String(data.circleLogoUrl || ""),
       fullLogoUrl: String(data.fullLogoUrl || ""),
@@ -26,6 +57,12 @@
         message: String(footer.message || ""),
         showContact: footer.showContact !== false,
         showLogo: footer.showLogo !== false
+      },
+      publicPage: {
+        intro: String(publicPage.intro || FALLBACK.publicPage.intro),
+        sections: Array.isArray(publicPage.sections) && publicPage.sections.length
+          ? publicPage.sections.map(normalizePublicSection)
+          : FALLBACK.publicPage.sections.map(normalizePublicSection)
       }
     };
   }
