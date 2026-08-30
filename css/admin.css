@@ -1639,6 +1639,29 @@ html {
     width: 100%;
 }
 
+.team-hero-editor {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+    gap: 22px;
+    align-items: center;
+    margin: 0 0 30px;
+    padding: 18px;
+    border: 1px solid var(--admin-border, rgba(22, 22, 22, 0.1));
+    border-radius: 20px;
+    background: rgba(127, 127, 127, 0.04);
+}
+
+.team-hero-editor > img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 14px;
+    background: var(--admin-bg, #ece9e5);
+}
+
+.team-hero-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.team-hero-editor-actions .admin-help-text { width: 100%; margin: 0; }
+
 .team-editor-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1790,6 +1813,8 @@ html {
     .team-save-notice {
         align-items: flex-start;
     }
+
+    .team-hero-editor { grid-template-columns: 1fr; }
 }
 
 /* ========================================
@@ -2323,6 +2348,7 @@ body.home-section-sorting * {
    TEAM EDITOR — DARK MODE
 ======================================== */
 @media (prefers-color-scheme: dark) {
+    .team-hero-editor { background: transparent; }
     .team-editor-panel .rich-editor {
         border-color: rgba(255, 255, 255, 0.14);
         background: #18181b;

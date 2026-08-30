@@ -1,14 +1,19 @@
 "use strict";
 
 document.addEventListener("DOMContentLoaded", () => {
-  const { auth, db } = window.kmcFirebase || {};
+  const { auth, db, storage } = window.kmcFirebase || {};
   const tools = window.kmcAdminTools;
+  const optimizer = window.kmcImageOptimizer;
   const page = document.getElementById("team-admin");
   const loading = document.getElementById("team-loading");
   const email = document.getElementById("admin-user-email");
   const logout = document.getElementById("admin-logout");
   const form = document.getElementById("team-form");
   const saveButton = document.getElementById("save-team");
+  const heroInput = document.getElementById("team-hero-input");
+  const heroPreview = document.getElementById("team-hero-preview");
+  const heroNote = document.getElementById("team-hero-note");
+  const resetHeroButton = document.getElementById("reset-team-hero");
   const saveBar = document.querySelector(".team-save-bar");
   const memberList = document.getElementById("member-editor-list");
   const memberTemplate = document.getElementById("member-editor-template");
@@ -21,8 +26,9 @@ document.addEventListener("DOMContentLoaded", () => {
   koHost.replaceWith(koEditor); koEditor.id = "teacher-message-ko";
   enHost.replaceWith(enEditor); enEditor.id = "teacher-message-en";
   let currentData = null;
+  let pendingHero = null;
 
-  const fallback = { instructorName:"Susanna Hong", instructorKoreanName:"홍수잔나", teacherMessageKo:"", teacherMessageEn:"", members:[] };
+  const fallback = { heroImageUrl:"assets/team/team-hero.jpg", instructorName:"Susanna Hong", instructorKoreanName:"홍수잔나", teacherMessageKo:"", teacherMessageEn:"", members:[] };
   const redirect = () => location.replace("login.html");
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `member-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const setStatus = (message="", type="") => { status.textContent=message; status.className="login-status"; if(type) status.classList.add(`is-${type}`); };
@@ -33,6 +39,32 @@ document.addEventListener("DOMContentLoaded", () => {
     saveBar.inert = !dirty;
   };
   let dragStartIndex = -1;
+
+  const heroUrl = value => /^(?:https?:|blob:|data:)/i.test(String(value || "")) ? value : `../${String(value || fallback.heroImageUrl).replace(/^\.\.\//, "")}`;
+  const setHeroPreview = url => { heroPreview.src = heroUrl(url); };
+
+  async function selectHero(file) {
+    if (!file) return;
+    try {
+      if (!optimizer) throw new Error("Image tools are unavailable.");
+      heroNote.textContent = "Preparing hero image…";
+      pendingHero = await optimizer.optimize(file, { maxWidth: 2400, maxHeight: 1600, quality: 0.88 });
+      setHeroPreview(URL.createObjectURL(pendingHero.blob));
+      heroNote.textContent = optimizer.summary(pendingHero);
+      setDirty();
+    } catch (error) {
+      console.error(error);
+      heroNote.textContent = error.message || "Unable to prepare this image.";
+    }
+  }
+
+  async function uploadHero() {
+    if (!pendingHero) return { heroImageUrl: currentData?.heroImageUrl || fallback.heroImageUrl, heroImagePath: currentData?.heroImagePath || "" };
+    if (!storage) throw new Error("Firebase Storage is unavailable.");
+    const path = `team/hero/${Date.now()}.${pendingHero.extension}`;
+    const snapshot = await storage.ref(path).put(pendingHero.blob, { contentType: pendingHero.contentType, cacheControl: "public,max-age=31536000,immutable" });
+    return { heroImageUrl: await snapshot.ref.getDownloadURL(), heroImagePath: path };
+  }
 
   function addMemberEditor(member={ id:uid(), name:"", age:"", service:"" }, shouldScroll=false) {
     const card = memberTemplate.content.firstElementChild.cloneNode(true);
@@ -62,6 +94,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function populate(data) {
     currentData = data;
+    pendingHero = null;
+    setHeroPreview(data.heroImageUrl || fallback.heroImageUrl);
+    heroNote.textContent = "";
     document.getElementById("instructor-name").value = data.instructorName || "";
     document.getElementById("instructor-korean-name").value = data.instructorKoreanName || "";
     koEditor.setHtml(data.teacherMessageKoHtml || tools.plainTextToHtml(data.teacherMessageKo || ""));
@@ -83,6 +118,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ["input", "change"].forEach(eventName => form.addEventListener(eventName, () => setDirty()));
   [koEditor, enEditor].forEach(editor => editor.querySelector(".rich-editor-toolbar")?.addEventListener("click", () => setTimeout(() => setDirty(), 0)));
+  heroInput.addEventListener("change", event => { selectHero(event.target.files?.[0]); event.target.value = ""; });
+  resetHeroButton.addEventListener("click", () => { pendingHero = null; setHeroPreview(currentData?.heroImageUrl || fallback.heroImageUrl); heroNote.textContent = ""; });
   addMemberButton.addEventListener("click",()=>{ addMemberEditor({},true); setDirty(); });
   form.addEventListener("submit", async event => {
     event.preventDefault();
@@ -92,9 +129,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if(members.some(m=>!m.name||!Number.isFinite(m.age))) { setDirty(); return setStatus("Every member needs a name and age.","error"); }
     saveButton.disabled=true; saveButton.textContent="Saving…";
     try {
-      const data={ instructorName:document.getElementById("instructor-name").value.trim(), instructorKoreanName:document.getElementById("instructor-korean-name").value.trim(), teacherMessageKoHtml:koEditor.getHtml(), teacherMessageEnHtml:enEditor.getHtml(), teacherMessageKo:koEditor.getText(), teacherMessageEn:enEditor.getText(), members, updatedAt:firebase.firestore.FieldValue.serverTimestamp() };
+      const hero = await uploadHero();
+      const data={ ...hero, instructorName:document.getElementById("instructor-name").value.trim(), instructorKoreanName:document.getElementById("instructor-korean-name").value.trim(), teacherMessageKoHtml:koEditor.getHtml(), teacherMessageEnHtml:enEditor.getHtml(), teacherMessageKo:koEditor.getText(), teacherMessageEn:enEditor.getText(), members, updatedAt:firebase.firestore.FieldValue.serverTimestamp() };
       await db.collection("siteContent").doc("team").set(data,{merge:true});
-      currentData=data; setStatus("Team page saved successfully.","success"); setDirty(false);
+      currentData=data; pendingHero=null; setHeroPreview(data.heroImageUrl); heroNote.textContent="Hero image saved."; setStatus("Team page saved successfully.","success"); setDirty(false);
       await tools.logActivity(db,auth,"Updated","team","team","Team page");
     } catch(error){ console.error(error); setDirty(); setStatus("Unable to save. Check your Firestore rules and connection.","error"); }
     finally { saveButton.disabled=false; saveButton.textContent="Save Team Page"; }

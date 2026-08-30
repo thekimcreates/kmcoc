@@ -17,7 +17,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="css/style.css?v=20260829info">
-    <link rel="stylesheet" href="css/team.css?v=20260725p2e">
+    <link rel="stylesheet" href="css/team.css?v=20260830teamhero">
 </head>
 <body class="team-page">
 
@@ -56,12 +56,10 @@
 </header>
 
 <main>
-    <section class="team-hero section" aria-labelledby="team-page-title">
-        <div class="section-container">
-            <header class="team-page-header reveal">
-                <h1 id="team-page-title">Meet Our Team</h1>
-            </header>
-        </div>
+    <section class="hero team-hero" aria-labelledby="team-page-title">
+        <div class="hero-slider"><div id="team-hero-image" class="hero-slide active" data-image-url="assets/team/team-hero.jpg" style="background-image: url('assets/team/team-hero.jpg');"></div></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content"><h1 id="team-page-title">Meet Our Team</h1></div>
     </section>
 
     <section class="instructor-section" aria-labelledby="instructor-title">
@@ -77,10 +75,9 @@
                     <p id="instructor-korean-name" class="instructor-korean">홍수잔나</p>
 
                     <div id="teacher-message" class="teacher-message" aria-live="polite">
-                        <h3>Teacher’s Message (Ko)</h3>
-                        <div id="teacher-message-ko"></div>
-                        <h3>Teacher’s Message (En)</h3>
-                        <div id="teacher-message-en"></div>
+                        <div class="teacher-message-header"><h3>Teacher’s Message</h3><div class="teacher-message-toggle" role="tablist" aria-label="Teacher message language"><button id="teacher-message-ko-toggle" type="button" role="tab" aria-controls="teacher-message-ko" aria-selected="true">한국어</button><button id="teacher-message-en-toggle" type="button" role="tab" aria-controls="teacher-message-en" aria-selected="false">English</button></div></div>
+                        <div id="teacher-message-ko" class="teacher-message-panel" role="tabpanel" aria-labelledby="teacher-message-ko-toggle"></div>
+                        <div id="teacher-message-en" class="teacher-message-panel" role="tabpanel" aria-labelledby="teacher-message-en-toggle" hidden></div>
                     </div>
                 </div>
             </article>
@@ -121,6 +118,6 @@
 
 
 
-<script defer src="js/team.js?v=20260725p3d"></script>
+<script defer src="js/team.js?v=20260830teamhero"></script>
 </body>
 </html>

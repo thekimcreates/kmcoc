@@ -1,10 +1,11 @@
 "use strict";
 
 (() => {
-    const CACHE_KEY = "kmc-public-team-v3";
+    const CACHE_KEY = "kmc-public-team-v4";
     const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
 
     const fallback = {
+        heroImageUrl: "assets/team/team-hero.jpg",
         instructorName: "Susanna Hong",
         instructorKoreanName: "홍수잔나",
         teacherMessageKo: "미국 웨스트민스터(Westminster)를 기반으로 활동하는 '한얼 사물놀이'는 홍수잔나(Susanna Hong) 선생님의 지도 아래 한국 전통 예술을 배우고 알리는 청소년 공연팀입니다.\n\n초등학생부터 고등학생까지의 학생들이 함께하며, 단순한 연주를 넘어 한국 문화에 대한 이해와 자긍심을 키워가고 있습니다.\n\n한얼은 꽹과리, 장구, 북, 징이 어우러지는 전통 사물놀이를 중심으로 역동적인 난타, 화려한 오고무, 삼고모 등 다양한 타악 레퍼토리를 선보입니다.\n\nSouth Coast Plaza, Lunar New Year Parade, 지역 축제 등 캘리포니아 곳곳의 무대에서 한국의 아름다움을 알려온 한얼은 공연뿐만 아니라 지역사회를 위한 봉사 활동에도 꾸준히 참여하고 있습니다.\n\n열정과 흥이 넘치는 공연으로 현지 커뮤니티에 한국의 소리를 전하며, 전통의 뿌리 위에 현대적인 감각을 더해 한국 전통 음악이 오늘날에도 살아 숨 쉬는 예술임을 보여주는 청소년 문화 공동체입니다.",
@@ -109,9 +110,22 @@
         const instructorKoreanName = document.getElementById("instructor-korean-name");
         const koreanMessage = document.getElementById("teacher-message-ko");
         const englishMessage = document.getElementById("teacher-message-en");
+        const heroImage = document.getElementById("team-hero-image");
+        const koreanToggle = document.getElementById("teacher-message-ko-toggle");
+        const englishToggle = document.getElementById("teacher-message-en-toggle");
         const membersGrid = document.getElementById("members-grid");
 
-        if (!instructorName || !instructorKoreanName || !koreanMessage || !englishMessage || !membersGrid) return;
+        if (!instructorName || !instructorKoreanName || !koreanMessage || !englishMessage || !heroImage || !koreanToggle || !englishToggle || !membersGrid) return;
+
+        const setMessageLanguage = language => {
+            const korean = language === "ko";
+            koreanMessage.hidden = !korean;
+            englishMessage.hidden = korean;
+            koreanToggle.setAttribute("aria-selected", String(korean));
+            englishToggle.setAttribute("aria-selected", String(!korean));
+        };
+        koreanToggle.addEventListener("click", () => setMessageLanguage("ko"));
+        englishToggle.addEventListener("click", () => setMessageLanguage("en"));
 
         let renderedSignature = "";
 
@@ -128,6 +142,9 @@
             renderedSignature = signature;
 
             instructorName.textContent = data.instructorName || fallback.instructorName;
+            const heroUrl = String(data.heroImageUrl || fallback.heroImageUrl).replace(/["'()\\]/g, "");
+            heroImage.style.backgroundImage = `url("${heroUrl}")`;
+            heroImage.dataset.imageUrl = heroUrl;
             instructorKoreanName.textContent = data.instructorKoreanName || "";
             instructorKoreanName.hidden = !instructorKoreanName.textContent;
             renderMessage(koreanMessage, data.teacherMessageKoHtml, data.teacherMessageKo);

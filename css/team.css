@@ -12,23 +12,10 @@
     z-index: 1;
 }
 
-.team-page .team-hero {
-    padding-top: 190px;
-    padding-bottom: 58px;
-}
-
-.team-page-header h1 {
-    margin: 0;
-    font-size: clamp(3.5rem, 9vw, 7.5rem);
-    font-weight: 800;
-    line-height: 0.94;
-    letter-spacing: -0.075em;
-}
+.team-page .team-hero .hero-content h1 { margin-bottom: 0; }
 
 /* Instructor */
-.instructor-section {
-    padding: 18px 24px 132px;
-}
+.instructor-section { padding: 112px 24px 132px; }
 
 .instructor-layout {
     display: grid;
@@ -90,12 +77,55 @@
     border-top: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
 }
 
+.teacher-message-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 22px;
+}
+
 .teacher-message h3 {
-    margin: 0 0 20px;
+    margin: 0;
     font-size: clamp(1.4rem, 2.4vw, 2rem);
     font-weight: 750;
     letter-spacing: -0.035em;
 }
+
+.teacher-message-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.teacher-message-toggle button {
+    min-height: 34px;
+    padding: 7px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--secondary-text);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.teacher-message-toggle button[aria-selected="true"] {
+    background: var(--kmc-primary);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(139, 0, 0, 0.2);
+}
+
+.teacher-message-toggle button:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.teacher-message-panel[hidden] { display: none; }
 
 .teacher-message p {
     margin: 0 0 22px;
@@ -157,19 +187,7 @@
     line-height: 1.45;
 }
 
-@media (hover: hover) and (pointer: fine) {
-    .member-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 30px 72px rgba(0, 0, 0, 0.15);
-    }
-}
-
 @media (max-width: 900px) {
-    .team-page .team-hero {
-        padding-top: 155px;
-        padding-bottom: 44px;
-    }
-
     .instructor-layout {
         grid-template-columns: 1fr;
         gap: 44px;
@@ -192,11 +210,6 @@
 }
 
 @media (max-width: 600px) {
-    .team-page .team-hero {
-        padding-top: 132px;
-        padding-bottom: 34px;
-    }
-
     .instructor-section,
     .members-section {
         padding-right: 16px;
@@ -204,6 +217,7 @@
     }
 
     .instructor-section {
+        padding-top: 74px;
         padding-bottom: 94px;
     }
 
@@ -218,6 +232,11 @@
     .members-grid {
         grid-template-columns: 1fr;
         gap: 24px;
+    }
+
+    .teacher-message-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .member-card > img {
