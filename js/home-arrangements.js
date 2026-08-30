@@ -12,7 +12,9 @@
     function render(data) {
         const grid = document.getElementById("home-arrangement-grid");
         if (!grid) return;
-        const arrangements = normalize(data);
+        // The home page is a preview; the full collection remains available on
+        // the Arrangements page via the "See All Arrangements" link.
+        const arrangements = normalize(data).slice(0, 2);
         const signature = JSON.stringify(arrangements.map(item => [item.id, item.name, item.koreanName, item.photoUrl, item.order]));
         if (signature === currentSignature && grid.childElementCount) return;
         currentSignature = signature;
