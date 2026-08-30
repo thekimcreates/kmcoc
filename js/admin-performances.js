@@ -87,6 +87,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const highlightPreviewWrap = get("performance-highlight-preview-wrap");
     const highlightPreview = get("performance-highlight-preview");
     const highlightRemove = get("performance-highlight-remove");
+    const galleryInput = get("performance-gallery");
+    const galleryList = get("performance-gallery-list");
+    const gallerySummary = get("performance-gallery-summary");
     const linksTbd = get("performance-links-tbd");
     const linksList = get("performance-links-list");
     const addLinkButton = get("performance-link-add");
@@ -109,6 +112,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let arrangementRecords = [];
     let previewObjectUrl = "";
     let removeExistingHighlight = false;
+    let galleryItems = [];
+    let pendingGalleryFiles = [];
+    let galleryPathsToDelete = [];
 
     const returnToLogin = () => location.replace("login.html");
     if (!auth || !db || !storage) {
@@ -285,6 +291,63 @@ document.addEventListener("DOMContentLoaded", () => {
         highlightPreviewWrap.hidden = false;
     }
 
+    function isVideoFile(file) {
+        return /^video\//i.test(file?.type || "") || /\.(mp4|mov|webm)$/i.test(file?.name || "");
+    }
+
+    function getVideoDuration(file) {
+        return new Promise((resolve) => {
+            const video = document.createElement("video");
+            const url = URL.createObjectURL(file);
+            let settled = false;
+            const finish = (duration = 0) => {
+                if (settled) return;
+                settled = true;
+                URL.revokeObjectURL(url);
+                resolve(Number.isFinite(duration) ? Math.round(duration) : 0);
+            };
+            video.preload = "metadata";
+            video.onloadedmetadata = () => finish(video.duration);
+            video.onerror = () => finish();
+            video.src = url;
+            window.setTimeout(() => finish(), 5000);
+        });
+    }
+
+    function renderGalleryFiles() {
+        const items = [
+            ...galleryItems.map((item, index) => ({ ...item, source: "saved", index })),
+            ...pendingGalleryFiles.map((item, index) => ({ ...item, source: "pending", index }))
+        ];
+        const photos = items.filter(item => item.type !== "video").length;
+        const videos = items.length - photos;
+        gallerySummary.textContent = items.length
+            ? `${items.length} item${items.length === 1 ? "" : "s"} · ${photos} photo${photos === 1 ? "" : "s"} · ${videos} video${videos === 1 ? "" : "s"}`
+            : "No gallery items selected.";
+        galleryList.replaceChildren();
+        items.forEach(item => {
+            const row = document.createElement("li");
+            row.className = "performance-gallery-admin-item";
+            const name = document.createElement("span");
+            name.textContent = `${item.type === "video" ? "Video" : "Photo"} · ${item.name || "Untitled file"}`;
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "admin-danger-button admin-small-button";
+            remove.textContent = "Delete";
+            remove.addEventListener("click", () => {
+                if (item.source === "saved") {
+                    const removed = galleryItems.splice(item.index, 1)[0];
+                    if (removed?.path) galleryPathsToDelete.push(removed.path);
+                } else {
+                    pendingGalleryFiles.splice(item.index, 1);
+                }
+                renderGalleryFiles();
+            });
+            row.append(name, remove);
+            galleryList.appendChild(row);
+        });
+    }
+
     function openPerformanceModal(trigger = null) {
         if (!modal) return;
 
@@ -372,6 +435,11 @@ document.addEventListener("DOMContentLoaded", () => {
         get("performance-location-lat").value = "";
         get("performance-location-lng").value = "";
         removeExistingHighlight = false;
+        galleryItems = [];
+        pendingGalleryFiles = [];
+        galleryPathsToDelete = [];
+        galleryInput.value = "";
+        renderGalleryFiles();
         clearPreview();
         linksList.replaceChildren();
         addExternalLink();
@@ -482,6 +550,12 @@ document.addEventListener("DOMContentLoaded", () => {
         highlightExisting.value = record.highlightPhotoUrl || "";
         if (record.highlightPhotoUrl) showPreview(record.highlightPhotoUrl);
 
+        galleryItems = Array.isArray(record.galleryItems) ? record.galleryItems.map(item => ({ ...item })) : [];
+        pendingGalleryFiles = [];
+        galleryPathsToDelete = [];
+        galleryInput.value = "";
+        renderGalleryFiles();
+
         linksList.replaceChildren();
         (record.externalLinks?.length ? record.externalLinks : [{}]).forEach(addExternalLink);
 
@@ -511,7 +585,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 const restored = { ...record }; delete restored.id;
                 await db.collection("performances").doc(record.id).set(restored);
                 await tools.logActivity(db, auth, "Restored", "performance", record.id, label);
-            }, { onExpire: () => tools.deleteStoragePath(storage, record.highlightPhotoPath) });
+            }, { onExpire: () => Promise.all([
+                tools.deleteStoragePath(storage, record.highlightPhotoPath),
+                ...(Array.isArray(record.galleryItems) ? record.galleryItems.map(item => item.path).filter(Boolean).map(path => tools.deleteStoragePath(storage, path)) : [])
+            ]) });
         } catch (error) {
             console.error("Unable to delete performance:", error);
             setStatus("The performance could not be deleted.", "error");
@@ -551,6 +628,39 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
         return { url: await snapshot.ref.getDownloadURL(), path, optimization: optimized };
+    }
+
+    async function uploadGalleryFiles(documentId) {
+        const uploaded = [];
+        for (const entry of pendingGalleryFiles) {
+            const file = entry.file;
+            const video = entry.type === "video";
+            let blob = file;
+            let fileName = file.name;
+            let mimeType = file.type || (video ? "video/mp4" : "image/jpeg");
+            if (!video) {
+                if (!imageOptimizer) throw new Error("The image optimizer could not be loaded. Refresh the page and try again.");
+                setStatus(`Optimizing gallery image ${uploaded.length + 1} of ${pendingGalleryFiles.length}…`);
+                const optimized = await imageOptimizer.optimize(file, { maxWidth: 2400, maxHeight: 2400, quality: 0.86 });
+                blob = optimized.blob;
+                fileName = optimized.fileName;
+                mimeType = optimized.contentType;
+            } else {
+                setStatus(`Uploading gallery video ${uploaded.length + 1} of ${pendingGalleryFiles.length}…`);
+            }
+            const path = `performance-gallery/${documentId}/${Date.now()}-${fileName}`;
+            const snapshot = await storage.ref(path).put(blob, { contentType: mimeType, cacheControl: "public,max-age=31536000,immutable" });
+            uploaded.push({
+                id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                url: await snapshot.ref.getDownloadURL(),
+                path,
+                name: file.name,
+                type: video ? "video" : "image",
+                mimeType,
+                duration: video ? entry.duration || 0 : 0
+            });
+        }
+        return uploaded;
     }
 
     auth.onAuthStateChanged(async (user) => {
@@ -623,6 +733,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (oldRecord.highlightPhotoPath && oldRecord.highlightPhotoPath !== uploaded.path) await tools.deleteStoragePath(storage, oldRecord.highlightPhotoPath);
             }
 
+            const uploadedGallery = await uploadGalleryFiles(reference.id);
+            const savedGallery = Array.isArray(galleryItems) ? galleryItems : [];
+            const nextGalleryItems = [...savedGallery, ...uploadedGallery];
+
             const data = {
                 date: dateInput.value,
                 time: timeTbd.checked ? "" : timeInput.value,
@@ -647,6 +761,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 highlightPhotoUrl,
                 highlightPhotoPath,
                 highlightTbd: highlightTbd.checked,
+                galleryItems: nextGalleryItems,
                 externalLinks: linksTbd.checked ? [] : links,
                 linksTbd: linksTbd.checked,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -659,6 +774,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 await reference.set(data);
             }
             if (pathToDeleteAfterSave) await tools.deleteStoragePath(storage, pathToDeleteAfterSave);
+            await Promise.all(galleryPathsToDelete.map(path => tools.deleteStoragePath(storage, path)));
             await tools.logActivity(db, auth, documentId ? "Updated" : "Created", "performance", reference.id, `${formatDate(data.date)} performance`);
 
             resetForm();
@@ -691,6 +807,21 @@ document.addEventListener("DOMContentLoaded", () => {
         highlightExisting.value = "";
         removeExistingHighlight = true;
         clearPreview();
+    });
+
+    galleryInput.addEventListener("change", async () => {
+        const selected = [...galleryInput.files];
+        galleryInput.value = "";
+        const accepted = selected.filter(file => file.size <= 100 * 1024 * 1024);
+        if (accepted.length !== selected.length) setStatus("Files larger than 100 MB were not added to the gallery.", "error");
+        const next = await Promise.all(accepted.map(async file => ({
+            file,
+            name: file.name,
+            type: isVideoFile(file) ? "video" : "image",
+            duration: isVideoFile(file) ? await getVideoDuration(file) : 0
+        })));
+        pendingGalleryFiles.push(...next);
+        renderGalleryFiles();
     });
 
     addLinkButton.addEventListener("click", () => addExternalLink());

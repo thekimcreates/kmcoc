@@ -28,6 +28,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const linksSection = document.getElementById("performance-links-section");
     const detailLinks = document.getElementById("performance-detail-links");
     const linksEmpty = document.getElementById("performance-links-empty");
+    const gallerySection = document.getElementById("performance-gallery-section");
+    const galleryPreview = document.getElementById("performance-gallery-preview");
+    const galleryShowAll = document.getElementById("performance-gallery-show-all");
+    const galleryModal = document.getElementById("performance-gallery-modal");
+    const galleryModalTitle = document.getElementById("performance-gallery-modal-title");
+    const galleryModalClose = document.getElementById("performance-gallery-modal-close");
+    const galleryGrid = document.getElementById("performance-gallery-grid");
+    const galleryViewer = document.getElementById("performance-gallery-viewer");
+    const galleryViewerClose = document.getElementById("performance-gallery-viewer-close");
+    const galleryViewerMedia = document.getElementById("performance-gallery-viewer-media");
+    const galleryVideoControls = document.getElementById("performance-gallery-video-controls");
+    const galleryVideoToggle = document.getElementById("performance-gallery-video-toggle");
+    const galleryVideoProgress = document.getElementById("performance-gallery-video-progress");
+    const galleryVideoTime = document.getElementById("performance-gallery-video-time");
 
     let records = [];
     let arrangementRecords = [];
@@ -35,6 +49,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeRecord = null;
     let lastFocusedElement = null;
     let closeTimer = null;
+    let galleryRecord = null;
+    let activeGalleryVideo = null;
     const selectedArrangements = new Set();
     const CACHE_KEYS = {
         performances: "kmc-public-performances-v2",
@@ -133,8 +149,8 @@ document.addEventListener("DOMContentLoaded", () => {
         span.setAttribute("aria-hidden", "true");
         span.innerHTML = `
             <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M8 16L16 8"></path>
-                <path d="M9 8h7v7"></path>
+                <path d="M7 12h10"></path>
+                <path d="M13 8l4 4-4 4"></path>
             </svg>
         `;
         return span;
@@ -174,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         arrangements.textContent = getArrangements(record).replaceAll(" · ", " • ");
 
         content.append(dateTime, locationHeading, arrangements);
-        button.append(content);
+        button.append(content, createArrowIcon());
         button.addEventListener("click", () => openDetail(record, button));
 
         return button;
@@ -247,6 +263,142 @@ document.addEventListener("DOMContentLoaded", () => {
         detailMembers.appendChild(list);
     }
 
+    function galleryItemsFor(record) {
+        return Array.isArray(record?.galleryItems)
+            ? record.galleryItems.filter(item => item?.url)
+            : [];
+    }
+
+    function isGalleryVideo(item) {
+        return item?.type === "video" || /^video\//i.test(item?.mimeType || "") || /\.(mp4|mov|webm)$/i.test(item?.url || "");
+    }
+
+    function formatDuration(seconds) {
+        const total = Math.max(0, Math.round(Number(seconds) || 0));
+        const minutes = Math.floor(total / 60);
+        return `${minutes}:${String(total % 60).padStart(2, "0")}`;
+    }
+
+    function createGalleryTile(item, index, className = "performance-gallery-tile") {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = className;
+        tile.setAttribute("aria-label", `Open ${item.name || (isGalleryVideo(item) ? "video" : "photo")}`);
+        if (isGalleryVideo(item)) {
+            const video = document.createElement("video");
+            video.src = item.url;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            tile.appendChild(video);
+            const badge = document.createElement("span");
+            badge.className = "performance-gallery-video-badge";
+            badge.textContent = item.duration ? formatDuration(item.duration) : "Video";
+            tile.appendChild(badge);
+        } else {
+            const image = document.createElement("img");
+            image.src = item.url;
+            image.alt = item.name || "Performance gallery photo";
+            image.loading = "lazy";
+            image.decoding = "async";
+            tile.appendChild(image);
+        }
+        return tile;
+    }
+
+    function renderGallery(record) {
+        const items = galleryItemsFor(record);
+        gallerySection.hidden = items.length === 0;
+        if (!items.length) {
+            galleryPreview.replaceChildren();
+            return;
+        }
+        galleryRecord = record;
+        galleryPreview.replaceChildren(...items.slice(0, 8).map((item, index) => {
+            const tile = createGalleryTile(item, index, "performance-gallery-preview-tile");
+            tile.addEventListener("click", () => openGallery(record, index));
+            return tile;
+        }));
+    }
+
+    function closeGalleryViewer() {
+        if (activeGalleryVideo) {
+            activeGalleryVideo.pause();
+            activeGalleryVideo = null;
+        }
+        galleryViewer.hidden = true;
+        galleryViewerMedia.replaceChildren();
+        galleryVideoControls.hidden = true;
+    }
+
+    function openGalleryViewer(index) {
+        const items = galleryItemsFor(galleryRecord);
+        const item = items[index];
+        if (!item) return;
+        closeGalleryViewer();
+        galleryViewer.hidden = false;
+        if (isGalleryVideo(item)) {
+            const video = document.createElement("video");
+            video.src = item.url;
+            video.playsInline = true;
+            video.preload = "metadata";
+            galleryViewerMedia.appendChild(video);
+            activeGalleryVideo = video;
+            galleryVideoControls.hidden = false;
+            const sync = () => {
+                const duration = Number(video.duration) || 0;
+                galleryVideoProgress.value = duration ? String((video.currentTime / duration) * 100) : "0";
+                galleryVideoTime.textContent = `${formatDuration(video.currentTime)} / ${formatDuration(duration)}`;
+                galleryVideoToggle.textContent = video.paused ? "Play" : "Pause";
+            };
+            video.addEventListener("loadedmetadata", sync);
+            video.addEventListener("timeupdate", sync);
+            video.addEventListener("play", sync);
+            video.addEventListener("pause", sync);
+            video.addEventListener("ended", sync);
+            galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
+            galleryVideoProgress.oninput = () => {
+                if (Number.isFinite(video.duration)) video.currentTime = (Number(galleryVideoProgress.value) / 100) * video.duration;
+            };
+            video.play().catch(() => sync());
+        } else {
+            const image = document.createElement("img");
+            image.src = item.url;
+            image.alt = item.name || "Performance gallery photo";
+            galleryViewerMedia.appendChild(image);
+        }
+    }
+
+    function openGallery(record, initialIndex = null) {
+        if (!galleryModal) return;
+        galleryRecord = record;
+        const items = galleryItemsFor(record);
+        if (!items.length) return;
+        galleryModalTitle.textContent = `${formatDate(record.date)} Gallery`;
+        galleryGrid.replaceChildren(...items.map((item, index) => {
+            const tile = createGalleryTile(item, index, "performance-gallery-tile");
+            tile.addEventListener("click", () => openGalleryViewer(index));
+            return tile;
+        }));
+        galleryModal.hidden = false;
+        galleryModal.setAttribute("aria-hidden", "false");
+        document.body.classList.add("performance-gallery-open");
+        requestAnimationFrame(() => galleryModal.classList.add("is-open"));
+        if (Number.isInteger(initialIndex)) openGalleryViewer(initialIndex);
+        else galleryModalClose.focus({ preventScroll: true });
+    }
+
+    function closeGallery() {
+        if (!galleryModal || galleryModal.hidden) return;
+        closeGalleryViewer();
+        galleryModal.classList.remove("is-open");
+        document.body.classList.remove("performance-gallery-open");
+        window.setTimeout(() => {
+            galleryModal.hidden = true;
+            galleryModal.setAttribute("aria-hidden", "true");
+        }, 220);
+    }
+
     function createExternalLink(link) {
         const anchor = document.createElement("a");
         anchor.className = "performance-external-link";
@@ -284,6 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         renderLocation(record);
         renderMembers(record);
+        renderGallery(record);
 
         const links = Array.isArray(record.externalLinks)
             ? record.externalLinks.filter((link) => link?.url)
@@ -600,6 +753,10 @@ document.addEventListener("DOMContentLoaded", () => {
     detailClose?.addEventListener("click", () => closeDetail());
     detail?.querySelector(".performance-detail-backdrop")?.addEventListener("click", () => closeDetail());
     detail?.addEventListener("keydown", trapDetailFocus);
+    galleryShowAll?.addEventListener("click", () => activeRecord && openGallery(activeRecord));
+    galleryModalClose?.addEventListener("click", closeGallery);
+    galleryModal?.querySelector(".performance-gallery-modal-backdrop")?.addEventListener("click", closeGallery);
+    galleryViewerClose?.addEventListener("click", closeGalleryViewer);
     yearFilter.addEventListener("change", render);
 
     arrangementTrigger?.addEventListener("click", toggleArrangementPopover);
@@ -619,6 +776,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.addEventListener("keydown", (event) => {
+        if (!galleryModal?.hidden && event.key === "Escape") {
+            event.preventDefault();
+            if (!galleryViewer.hidden) closeGalleryViewer();
+            else closeGallery();
+            return;
+        }
         if (event.key === "Escape" && !arrangementPopover.hidden) {
             closeArrangementPopover();
             arrangementTrigger.focus();
@@ -657,6 +820,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 detailArrangements.textContent = getArrangements(updated).replaceAll(" · ", " • ");
                 renderLocation(updated);
                 renderMembers(updated);
+                renderGallery(updated);
             }
         } else if (reopenHash) {
             openHashRecord();

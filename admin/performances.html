@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Manage Performances | KMC Samulnori</title>
-    <link rel="stylesheet" href="../css/admin.css?v=20260725p3a">
+    <link rel="stylesheet" href="../css/admin.css?v=20260830performancegallery">
     <link rel="stylesheet" href="../css/admin-mobile-polish.css?v=20260725p3a">
 </head>
 <body data-admin-page="performances">
@@ -155,6 +155,17 @@
                             </div>
                         </fieldset>
 
+                        <fieldset class="admin-subsection performance-gallery-admin-section">
+                            <legend>Gallery</legend>
+                            <div class="admin-field">
+                                <label for="performance-gallery">Upload photos and videos</label>
+                                <input id="performance-gallery" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" multiple>
+                                <p class="admin-help-text">Choose multiple photos or videos. Videos up to 100 MB are supported.</p>
+                            </div>
+                            <p id="performance-gallery-summary" class="performance-gallery-admin-summary">No gallery items selected.</p>
+                            <ul id="performance-gallery-list" class="performance-gallery-admin-list" aria-live="polite"></ul>
+                        </fieldset>
+
                         <fieldset class="admin-subsection">
                             <legend>External links</legend>
                             <label class="admin-toggle-row">
@@ -216,7 +227,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
     <script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260725p3a"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
     
-    <script src="../js/image-optimizer.js?v=20260725p3a"></script><script src="../js/admin-performances.js?v=20260725p3a"></script>
+    <script src="../js/image-optimizer.js?v=20260725p3a"></script><script src="../js/admin-performances.js?v=20260830performancegallery"></script>
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-MVpD9Qvsag1sJKHblNsBdQXZDXPTbMI&libraries=places&callback=initializeKmcPerformanceMap"></script>
     
 </body>

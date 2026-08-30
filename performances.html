@@ -24,7 +24,7 @@
     >
 
     <link rel="stylesheet" href="css/style.css?v=20260829info">
-    <link rel="stylesheet" href="css/performances.css?v=20260725p2e">
+    <link rel="stylesheet" href="css/performances.css?v=20260830performancegallery">
 </head>
 
 <body class="performances-page">
@@ -214,6 +214,14 @@
                     <div class="performance-members-list" id="performance-detail-members"></div>
                 </section>
 
+                <section class="performance-detail-section performance-gallery-section" id="performance-gallery-section" hidden>
+                    <div class="performance-detail-section-heading performance-gallery-heading">
+                        <div><p>Gallery</p><h3>Gallery</h3></div>
+                        <button id="performance-gallery-show-all" class="performance-gallery-show-all" type="button">Show All</button>
+                    </div>
+                    <div id="performance-gallery-preview" class="performance-gallery-preview" aria-live="polite"></div>
+                </section>
+
                 <section class="performance-detail-section performance-links-section" id="performance-links-section">
                     <div class="performance-detail-section-heading">
                         <h3>Links</h3>
@@ -227,6 +235,19 @@
         </div>
     </div>
 </section>
+
+<div id="performance-gallery-modal" class="performance-gallery-modal" hidden aria-hidden="true">
+    <div class="performance-gallery-modal-backdrop"></div>
+    <section class="performance-gallery-modal-shell" role="dialog" aria-modal="true" aria-labelledby="performance-gallery-modal-title">
+        <header class="performance-gallery-modal-header"><div><p>Gallery</p><h2 id="performance-gallery-modal-title">Performance Gallery</h2></div><button id="performance-gallery-modal-close" class="performance-gallery-modal-close" type="button" aria-label="Close gallery"><span></span><span></span></button></header>
+        <div id="performance-gallery-grid" class="performance-gallery-grid"></div>
+        <div id="performance-gallery-viewer" class="performance-gallery-viewer" hidden>
+            <button id="performance-gallery-viewer-close" class="performance-gallery-viewer-close" type="button" aria-label="Back to gallery">‹</button>
+            <div id="performance-gallery-viewer-media" class="performance-gallery-viewer-media"></div>
+            <div id="performance-gallery-video-controls" class="performance-gallery-video-controls" hidden><button id="performance-gallery-video-toggle" type="button">Play</button><input id="performance-gallery-video-progress" type="range" min="0" max="100" value="0" aria-label="Video progress"><span id="performance-gallery-video-time">0:00</span></div>
+        </div>
+    </section>
+</div>
 
 <footer class="footer">
     <div class="footer-container">
@@ -254,7 +275,7 @@
 
 
 
-<script defer src="js/performances.js?v=20260725p2e"></script>
+<script defer src="js/performances.js?v=20260830performancegallery"></script>
 
 </body>
 </html>
