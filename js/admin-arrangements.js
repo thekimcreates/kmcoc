@@ -15,15 +15,56 @@ document.addEventListener("DOMContentLoaded", () => {
   const pageStatus = q("arrangement-page-status");
   const editor = q("arrangement-editor-modal");
   const instrumentModal = q("instrument-modal");
+  const saveBar = q("arrangements-save-bar");
+  const saveMessage = q("arrangements-save-message");
+  const saveButton = q("save-arrangements");
+  const revertButton = q("revert-arrangements");
   let state = structuredClone(defaults);
   let removeArrangementPhoto = false;
   let draggedArrangementId = null;
+  let savedTimer = null;
+  const storagePathsToDelete = new Set();
 
   const slug = value => String(value || "item").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `item-${Date.now()}`;
   const status = (el, msg, type = "") => { el.textContent = msg; el.className = `login-status${type ? ` is-${type}` : ""}`; };
   const displayUrl = url => String(url || "").startsWith("assets/") ? `../${url}` : url;
   const instrumentById = id => state.instruments.find(item => item.id === id);
   const saveState = async () => docRef.set({ ...state, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: auth.currentUser?.uid || null });
+  const setDirty = (dirty = true) => {
+    clearTimeout(savedTimer);
+    saveBar.classList.toggle("is-visible", dirty);
+    saveBar.setAttribute("aria-hidden", String(!dirty));
+    saveBar.inert = !dirty;
+    if (!dirty) return;
+    saveMessage.textContent = "Your changes are not saved. Press the button to save changes.";
+    saveMessage.classList.remove("is-saved");
+    revertButton.hidden = false;
+    saveButton.disabled = false;
+    saveButton.classList.remove("is-saving", "is-saved");
+    saveButton.textContent = "Save Changes";
+    saveButton.removeAttribute("aria-label");
+  };
+  const showSaving = () => {
+    saveBar.classList.add("is-visible");
+    saveBar.setAttribute("aria-hidden", "false");
+    saveBar.inert = false;
+    revertButton.hidden = true;
+    saveButton.disabled = true;
+    saveButton.classList.add("is-saving");
+    saveButton.innerHTML = '<span class="arrangements-save-spinner" aria-hidden="true"></span>';
+    saveButton.setAttribute("aria-label", "Saving changes");
+  };
+  const showSaved = () => {
+    saveMessage.textContent = "Changes saved successfully.";
+    saveMessage.classList.add("is-saved");
+    revertButton.hidden = true;
+    saveButton.classList.remove("is-saving");
+    saveButton.classList.add("is-saved");
+    saveButton.disabled = true;
+    saveButton.textContent = "✓";
+    saveButton.setAttribute("aria-label", "Changes saved successfully");
+    savedTimer = window.setTimeout(() => setDirty(false), 3000);
+  };
   const openModal = modal => { modal.hidden = false; modal.setAttribute("aria-hidden", "false"); requestAnimationFrame(() => modal.classList.add("is-open")); document.body.style.overflow = "hidden"; };
   const closeModal = modal => { modal.classList.remove("is-open"); modal.setAttribute("aria-hidden", "true"); setTimeout(() => { modal.hidden = true; }, 250); document.body.style.overflow = ""; };
   const preview = (img, wrap, url) => { if (url) { img.src = displayUrl(url); wrap.hidden = false; } else { img.removeAttribute("src"); wrap.hidden = true; } };
@@ -59,16 +100,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.arrangements.forEach((item, index) => { item.order = index; });
   }
 
-  async function persistArrangementOrder() {
+  function persistArrangementOrder() {
     normalizeArrangementOrder();
-    try {
-      await saveState();
-      status(pageStatus, "Arrangement order saved.", "success");
-      await tools.logActivity(db, auth, "Reordered", "arrangements", "arrangements", "Arrangement order");
-    } catch (error) {
-      console.error(error);
-      status(pageStatus, "Unable to save arrangement order.", "error");
-    }
+    setDirty();
   }
 
   function renderList() {
@@ -89,13 +123,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const index = state.arrangements.findIndex(entry => entry.id === item.id);
         state.arrangements = state.arrangements.filter(entry => entry.id !== item.id);
         normalizeArrangementOrder();
-        await saveState();
         renderList();
-        await tools.logActivity(db, auth, "Deleted", "arrangement", item.id, item.name);
-        tools.showUndo(`${item.name} deleted.`, async () => {
-          state.arrangements.splice(Math.max(0,index),0,item); normalizeArrangementOrder(); await saveState(); renderList();
-          await tools.logActivity(db, auth, "Restored", "arrangement", item.id, item.name);
-        }, { onExpire: () => tools.deleteStoragePath(storage, item.photoPath) });
+        setDirty();
+        tools.showUndo(`${item.name} deleted.`, () => {
+          state.arrangements.splice(Math.max(0,index),0,item); normalizeArrangementOrder(); renderList(); setDirty();
+        });
       };
       list.appendChild(card);
     });
@@ -258,7 +290,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderSelectedInstruments() {
     const box = q("selected-instruments");
-    const existing = new Map([...box.querySelectorAll("[data-instrument-id]")].map(row => [row.dataset.instrumentId, row._richEditor?.getHtml?.() || ""]));
     box.replaceChildren();
     [...q("instrument-checklist").querySelectorAll("input:checked")].forEach(input => {
       const inst = instrumentById(input.value);
@@ -266,13 +297,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const row = document.createElement("article");
       row.className = "selected-instrument-card";
       row.dataset.instrumentId = inst.id;
-      row.innerHTML = `<img alt="" loading="lazy" decoding="async"><div class="selected-instrument-copy"><h3></h3><label>Description for this arrangement</label><div data-editor-host></div></div>`;
+      row.innerHTML = `<img alt="" loading="lazy" decoding="async"><div class="selected-instrument-copy"><h3></h3></div>`;
       row.querySelector("img").src = displayUrl(inst.photoUrl);
       row.querySelector("img").alt = inst.name || "Instrument";
       row.querySelector("h3").textContent = `${inst.name} ${inst.koreanName || ""}`.trim();
-      const editor = tools.createRichEditor(existing.get(inst.id) || "", `Description of ${inst.name} for this arrangement`);
-      row.querySelector("[data-editor-host]").replaceWith(editor);
-      row._richEditor = editor;
       box.appendChild(row);
     });
   }
@@ -290,10 +318,6 @@ document.addEventListener("DOMContentLoaded", () => {
     preview(q("arrangement-photo-preview"), q("arrangement-photo-preview-wrap"), item.photoUrl);
     renderInstrumentChecklist(item.instruments || []);
     renderSelectedInstruments();
-    [...q("selected-instruments").children].forEach(row => {
-      const match = (item.instruments || []).find(entry => entry.instrumentId === row.dataset.instrumentId);
-      row._richEditor?.setHtml(match?.descriptionHtml || tools.plainTextToHtml(match?.description || ""));
-    });
     status(q("arrangement-form-status"), "");
     openModal(editor);
   }
@@ -310,17 +334,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const uploaded = await upload(q("arrangement-photo").files[0], "arrangement-photos", id, q("arrangement-form-status"));
       if (uploaded) ({ photoUrl, photoPath } = uploaded);
       if (!photoUrl) throw new Error("Please upload an arrangement photo.");
-      const instruments = [...q("selected-instruments").children].map((row, order) => ({ instrumentId: row.dataset.instrumentId, descriptionHtml: row._richEditor?.getHtml() || "", description: row._richEditor?.getText() || "", order }));
+      const instruments = [...q("selected-instruments").children].map((row, order) => ({ instrumentId: row.dataset.instrumentId, order }));
       const record = { id, name: q("arrangement-name").value.trim(), koreanName: q("arrangement-korean").value.trim(), photoUrl, photoPath, order: old?.order ?? state.arrangements.length, instruments };
       state.arrangements = old ? state.arrangements.map(item => item.id === oldId ? record : item) : [...state.arrangements, record];
       normalizeArrangementOrder();
-      await saveState();
-      if (uploaded && old?.photoPath && old.photoPath !== uploaded.photoPath) await tools.deleteStoragePath(storage, old.photoPath);
-      if (removeArrangementPhoto && old?.photoPath) await tools.deleteStoragePath(storage, old.photoPath);
+      if (uploaded && old?.photoPath && old.photoPath !== uploaded.photoPath) storagePathsToDelete.add(old.photoPath);
+      if (removeArrangementPhoto && old?.photoPath) storagePathsToDelete.add(old.photoPath);
       renderList();
       closeModal(editor);
-      status(pageStatus, uploaded?.optimization ? `Arrangement saved. ${imageOptimizer.summary(uploaded.optimization)}` : "Arrangement saved.", "success");
-      await tools.logActivity(db, auth, old ? "Updated" : "Created", "arrangement", id, record.name);
+      status(pageStatus, "");
+      setDirty();
     } catch (error) {
       console.error(error);
       status(q("arrangement-form-status"), error.message || "Unable to save.", "error");
@@ -347,9 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!photoUrl) throw new Error("Please upload an instrument photo.");
     const record = { id, name: name.trim(), koreanName: koreanName.trim(), photoUrl, photoPath };
     state.instruments = oldId ? state.instruments.map(item => item.id === oldId ? record : item) : [...state.instruments, record];
-    await saveState();
-    if (uploaded && existingPath && existingPath !== uploaded.photoPath) await tools.deleteStoragePath(storage, existingPath);
-    await tools.logActivity(db, auth, oldId ? "Updated" : "Created", "instrument", id, record.name);
+    if (uploaded && existingPath && existingPath !== uploaded.photoPath) storagePathsToDelete.add(existingPath);
     return uploaded;
   }
 
@@ -359,7 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.instruments.forEach(inst => {
       const row = document.createElement("article");
       row.className = `instrument-library-card${expandedId === inst.id ? " is-expanded" : ""}`;
-      row.innerHTML = `<div class="instrument-library-summary"><img alt="" loading="lazy" decoding="async"><div><h3></h3><p>Used by <span></span> arrangement(s)</p></div><div class="performance-admin-actions"><button data-edit class="admin-secondary-button admin-small-button" type="button">Edit</button><button data-delete class="admin-danger-button admin-small-button" type="button">Delete</button></div></div><form class="instrument-inline-editor" ${expandedId === inst.id ? "" : "hidden"}><div class="team-editor-grid"><div class="admin-field"><label>English name</label><input data-name required></div><div class="admin-field"><label>Korean name</label><input data-korean></div></div><div class="admin-field"><label>Instrument photo</label><input data-photo type="file" accept="image/*,.heic,.heif"></div><div class="performance-form-actions"><button class="admin-submit" type="submit">Save Changes</button><button data-cancel class="admin-secondary-button" type="button">Cancel</button></div></form>`;
+      row.innerHTML = `<div class="instrument-library-summary"><img alt="" loading="lazy" decoding="async"><div><h3></h3><p>Used by <span></span> arrangement(s)</p></div><div class="performance-admin-actions"><button data-edit class="admin-secondary-button admin-small-button" type="button">Edit</button><button data-delete class="admin-danger-button admin-small-button" type="button">Delete</button></div></div><form class="instrument-inline-editor" ${expandedId === inst.id ? "" : "hidden"}><div class="team-editor-grid"><div class="admin-field"><label>English name</label><input data-name required></div><div class="admin-field"><label>Korean name</label><input data-korean></div></div><div class="admin-field"><label>Instrument photo</label><input data-photo type="file" accept="image/*,.heic,.heif"></div><div class="performance-form-actions"><button class="admin-submit" type="submit">Apply Changes</button><button data-cancel class="admin-secondary-button" type="button">Cancel</button></div></form>`;
       row.querySelector("img").src = displayUrl(inst.photoUrl);
       row.querySelector("img").alt = inst.name;
       row.querySelector("h3").textContent = `${inst.name} ${inst.koreanName || ""}`.trim();
@@ -370,12 +391,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!await tools.confirmAction({ title:"Delete instrument?", message:`Delete ${inst.name}? You can undo this for a few seconds.`, confirmText:"Delete" })) return;
         const index = state.instruments.findIndex(item => item.id === inst.id);
         state.instruments = state.instruments.filter(item => item.id !== inst.id);
-        await saveState(); renderInstrumentLibrary();
-        await tools.logActivity(db, auth, "Deleted", "instrument", inst.id, inst.name);
-        tools.showUndo(`${inst.name} deleted.`, async () => {
-          state.instruments.splice(Math.max(0,index),0,inst); await saveState(); renderInstrumentLibrary();
-          await tools.logActivity(db, auth, "Restored", "instrument", inst.id, inst.name);
-        }, { onExpire: () => tools.deleteStoragePath(storage, inst.photoPath) });
+        renderInstrumentLibrary();
+        setDirty();
+        tools.showUndo(`${inst.name} deleted.`, () => {
+          state.instruments.splice(Math.max(0,index),0,inst); renderInstrumentLibrary(); setDirty();
+        });
       };
       const form = row.querySelector("form");
       form.querySelector("[data-name]").value = inst.name;
@@ -386,7 +406,8 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           const uploaded = await saveInstrument({ oldId: inst.id, name: form.querySelector("[data-name]").value, koreanName: form.querySelector("[data-korean]").value, file: form.querySelector("[data-photo]").files[0], existingUrl: inst.photoUrl, existingPath: inst.photoPath });
           renderInstrumentLibrary();
-          status(q("instrument-status"), uploaded?.optimization ? `Instrument saved. ${imageOptimizer.summary(uploaded.optimization)}` : "Instrument saved.", "success");
+          status(q("instrument-status"), "");
+          setDirty();
         } catch (error) {
           status(q("instrument-status"), error.message || "Unable to save.", "error");
         }
@@ -402,7 +423,8 @@ document.addEventListener("DOMContentLoaded", () => {
       q("instrument-form").hidden = true;
       resetAddInstrumentForm();
       renderInstrumentLibrary();
-      status(q("instrument-status"), uploaded?.optimization ? `Instrument added. ${imageOptimizer.summary(uploaded.optimization)}` : "Instrument added.", "success");
+      status(q("instrument-status"), "");
+      setDirty();
     } catch (error) {
       status(q("instrument-status"), error.message || "Unable to save.", "error");
     }
@@ -422,6 +444,24 @@ document.addEventListener("DOMContentLoaded", () => {
   q("instrument-photo").onchange = () => { const file = q("instrument-photo").files[0]; if (file) preview(q("instrument-photo-preview"), q("instrument-photo-preview-wrap"), URL.createObjectURL(file)); };
   document.querySelectorAll("[data-close-modal]").forEach(button => { button.onclick = () => closeModal(editor); });
   document.querySelectorAll("[data-close-instrument-modal]").forEach(button => { button.onclick = () => closeModal(instrumentModal); });
+  revertButton.onclick = () => window.location.reload();
+  saveButton.onclick = async () => {
+    showSaving();
+    try {
+      state.arrangements.forEach(arrangement => {
+        arrangement.instruments = (arrangement.instruments || []).map((selection, order) => ({ instrumentId: selection.instrumentId, order }));
+      });
+      await saveState();
+      await Promise.all([...storagePathsToDelete].map(path => tools.deleteStoragePath(storage, path)));
+      storagePathsToDelete.clear();
+      await tools.logActivity(db, auth, "Updated", "arrangements", "arrangements", "Arrangements and instruments");
+      showSaved();
+    } catch (error) {
+      console.error(error);
+      setDirty();
+      status(pageStatus, "Unable to save changes. Check your connection and try again.", "error");
+    }
+  };
   logout.onclick = async () => { await tools.signOut(auth); location.replace("login.html"); };
 
   if (!auth || !db || !storage) { loading.textContent = "Firebase could not be initialized."; return; }

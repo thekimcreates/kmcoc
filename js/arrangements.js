@@ -160,7 +160,7 @@
                 const arrow = document.createElement("span");
                 arrow.className = "arrangement-card-arrow";
                 arrow.setAttribute("aria-hidden", "true");
-                arrow.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M6 9l6 6 6-6"></path></svg>';
+                arrow.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M8 5l7 7-7 7"></path></svg>';
 
                 card.append(image, content, arrow);
                 fragment.appendChild(card);
@@ -203,7 +203,7 @@
 
                 const article = document.createElement("article");
                 article.className = "instrument-row";
-                article.innerHTML = '<div class="instrument-image"><img loading="lazy" decoding="async"></div><div class="instrument-copy"><h4></h4><p></p></div>';
+                article.innerHTML = '<div class="instrument-image"><img loading="lazy" decoding="async"></div><div class="instrument-copy"><h4></h4></div>';
 
                 const image = article.querySelector("img");
                 image.src = instrument.photoUrl || "";
@@ -216,10 +216,6 @@
                     korean.textContent = instrument.koreanName;
                     heading.append(" ", korean);
                 }
-
-                const description = article.querySelector("p");
-                if (selection.descriptionHtml) description.innerHTML = sanitizeHtml(selection.descriptionHtml);
-                else description.textContent = selection.description || "Description coming soon.";
 
                 fragment.appendChild(article);
             });
