@@ -41,7 +41,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const galleryVideoControls = document.getElementById("performance-gallery-video-controls");
     const galleryVideoToggle = document.getElementById("performance-gallery-video-toggle");
     const galleryVideoProgress = document.getElementById("performance-gallery-video-progress");
-    const galleryVideoTime = document.getElementById("performance-gallery-video-time");
+    const galleryVideoElapsed = document.getElementById("performance-gallery-video-elapsed");
+    const galleryVideoDuration = document.getElementById("performance-gallery-video-duration");
 
     let records = [];
     let arrangementRecords = [];
@@ -265,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function galleryItemsFor(record) {
         return Array.isArray(record?.galleryItems)
-            ? record.galleryItems.filter(item => item?.url)
+            ? record.galleryItems.filter((item) => item?.url)
             : [];
     }
 
@@ -275,11 +276,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function formatDuration(seconds) {
         const total = Math.max(0, Math.round(Number(seconds) || 0));
-        const minutes = Math.floor(total / 60);
-        return `${minutes}:${String(total % 60).padStart(2, "0")}`;
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
     }
 
-    function createGalleryTile(item, index, className = "performance-gallery-tile") {
+    function createGalleryTile(item, className) {
         const tile = document.createElement("button");
         tile.type = "button";
         tile.className = className;
@@ -309,64 +309,66 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderGallery(record) {
         const items = galleryItemsFor(record);
         gallerySection.hidden = items.length === 0;
-        if (!items.length) {
-            galleryPreview.replaceChildren();
-            return;
-        }
+        galleryPreview.replaceChildren();
+        if (!items.length) return;
         galleryRecord = record;
-        galleryPreview.replaceChildren(...items.slice(0, 8).map((item, index) => {
-            const tile = createGalleryTile(item, index, "performance-gallery-preview-tile");
+        galleryPreview.replaceChildren(...items.slice(0, 16).map((item, index) => {
+            const tile = createGalleryTile(item, "performance-gallery-preview-tile");
             tile.addEventListener("click", () => openGallery(record, index));
             return tile;
         }));
     }
 
     function closeGalleryViewer() {
-        if (activeGalleryVideo) {
-            activeGalleryVideo.pause();
-            activeGalleryVideo = null;
-        }
+        activeGalleryVideo?.pause();
+        activeGalleryVideo = null;
         galleryViewer.hidden = true;
         galleryViewerMedia.replaceChildren();
         galleryVideoControls.hidden = true;
+        galleryVideoToggle.classList.remove("is-playing");
     }
 
     function openGalleryViewer(index) {
-        const items = galleryItemsFor(galleryRecord);
-        const item = items[index];
+        const item = galleryItemsFor(galleryRecord)[index];
         if (!item) return;
         closeGalleryViewer();
         galleryViewer.hidden = false;
-        if (isGalleryVideo(item)) {
-            const video = document.createElement("video");
-            video.src = item.url;
-            video.playsInline = true;
-            video.preload = "metadata";
-            galleryViewerMedia.appendChild(video);
-            activeGalleryVideo = video;
-            galleryVideoControls.hidden = false;
-            const sync = () => {
-                const duration = Number(video.duration) || 0;
-                galleryVideoProgress.value = duration ? String((video.currentTime / duration) * 100) : "0";
-                galleryVideoTime.textContent = `${formatDuration(video.currentTime)} / ${formatDuration(duration)}`;
-                galleryVideoToggle.textContent = video.paused ? "Play" : "Pause";
-            };
-            video.addEventListener("loadedmetadata", sync);
-            video.addEventListener("timeupdate", sync);
-            video.addEventListener("play", sync);
-            video.addEventListener("pause", sync);
-            video.addEventListener("ended", sync);
-            galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
-            galleryVideoProgress.oninput = () => {
-                if (Number.isFinite(video.duration)) video.currentTime = (Number(galleryVideoProgress.value) / 100) * video.duration;
-            };
-            video.play().catch(() => sync());
-        } else {
+        if (!isGalleryVideo(item)) {
             const image = document.createElement("img");
             image.src = item.url;
             image.alt = item.name || "Performance gallery photo";
             galleryViewerMedia.appendChild(image);
+            return;
         }
+
+        const video = document.createElement("video");
+        video.src = item.url;
+        video.playsInline = true;
+        video.preload = "metadata";
+        galleryViewerMedia.appendChild(video);
+        activeGalleryVideo = video;
+        galleryVideoControls.hidden = false;
+
+        const syncVideoControls = () => {
+            const duration = Number(video.duration) || Number(item.duration) || 0;
+            galleryVideoProgress.value = duration ? String((video.currentTime / duration) * 100) : "0";
+            galleryVideoElapsed.textContent = formatDuration(video.currentTime);
+            galleryVideoDuration.textContent = formatDuration(duration);
+            galleryVideoToggle.classList.toggle("is-playing", !video.paused);
+            galleryVideoToggle.setAttribute("aria-label", video.paused ? "Play video" : "Pause video");
+        };
+
+        video.addEventListener("loadedmetadata", syncVideoControls);
+        video.addEventListener("timeupdate", syncVideoControls);
+        video.addEventListener("play", syncVideoControls);
+        video.addEventListener("pause", syncVideoControls);
+        video.addEventListener("ended", syncVideoControls);
+        galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
+        galleryVideoProgress.oninput = () => {
+            if (Number.isFinite(video.duration)) video.currentTime = (Number(galleryVideoProgress.value) / 100) * video.duration;
+        };
+        syncVideoControls();
+        video.play().catch(syncVideoControls);
     }
 
     function openGallery(record, initialIndex = null) {
@@ -374,9 +376,10 @@ document.addEventListener("DOMContentLoaded", () => {
         galleryRecord = record;
         const items = galleryItemsFor(record);
         if (!items.length) return;
+        closeGalleryViewer();
         galleryModalTitle.textContent = `${formatDate(record.date)} Gallery`;
         galleryGrid.replaceChildren(...items.map((item, index) => {
-            const tile = createGalleryTile(item, index, "performance-gallery-tile");
+            const tile = createGalleryTile(item, "performance-gallery-tile");
             tile.addEventListener("click", () => openGalleryViewer(index));
             return tile;
         }));
@@ -396,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
         window.setTimeout(() => {
             galleryModal.hidden = true;
             galleryModal.setAttribute("aria-hidden", "true");
-        }, 220);
+        }, 180);
     }
 
     function createExternalLink(link) {

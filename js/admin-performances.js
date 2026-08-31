@@ -631,8 +631,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function uploadGalleryFiles(documentId) {
-        const uploaded = [];
-        for (const entry of pendingGalleryFiles) {
+        const queue = [...pendingGalleryFiles];
+        const uploaded = new Array(queue.length);
+        let nextIndex = 0;
+        let completed = 0;
+
+        async function uploadNext() {
+            const index = nextIndex++;
+            if (index >= queue.length) return;
+            const entry = queue[index];
             const file = entry.file;
             const video = entry.type === "video";
             let blob = file;
@@ -640,21 +647,21 @@ document.addEventListener("DOMContentLoaded", () => {
             let mimeType = file.type || (video ? "video/mp4" : "image/jpeg");
             if (!video) {
                 if (!imageOptimizer) throw new Error("The image optimizer could not be loaded. Refresh the page and try again.");
-                setStatus(`Optimizing gallery image ${uploaded.length + 1} of ${pendingGalleryFiles.length}…`);
-                const optimized = await imageOptimizer.optimize(file, { maxWidth: 2400, maxHeight: 2400, quality: 0.86 });
+                setStatus(`Preparing gallery files… ${completed} of ${queue.length} complete`);
+                const optimized = await imageOptimizer.optimize(file, { maxWidth: 2000, maxHeight: 2000, quality: 0.84 });
                 blob = optimized.blob;
                 fileName = optimized.fileName;
                 mimeType = optimized.contentType;
             } else {
-                setStatus(`Uploading gallery video ${uploaded.length + 1} of ${pendingGalleryFiles.length}…`);
+                setStatus(`Uploading gallery files… ${completed} of ${queue.length} complete`);
             }
             // Gallery assets share the approved performance-highlights prefix.
             // The site's current Firebase Storage policy already allows admins to
             // write there, while a new top-level performance-gallery prefix is
             // denied by that policy.
-            const path = `performance-highlights/${documentId}/gallery-${Date.now()}-${fileName}`;
+            const path = `performance-highlights/${documentId}/gallery-${Date.now()}-${index}-${fileName}`;
             const snapshot = await storage.ref(path).put(blob, { contentType: mimeType, cacheControl: "public,max-age=31536000,immutable" });
-            uploaded.push({
+            uploaded[index] = {
                 id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 url: await snapshot.ref.getDownloadURL(),
                 path,
@@ -662,8 +669,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 type: video ? "video" : "image",
                 mimeType,
                 duration: video ? entry.duration || 0 : 0
-            });
+            };
+            completed += 1;
+            setStatus(`Uploading gallery files… ${completed} of ${queue.length} complete`);
+            await uploadNext();
         }
+
+        const workerCount = Math.min(3, queue.length);
+        await Promise.all(Array.from({ length: workerCount }, () => uploadNext()));
         return uploaded;
     }
 
@@ -816,8 +829,8 @@ document.addEventListener("DOMContentLoaded", () => {
     galleryInput.addEventListener("change", async () => {
         const selected = [...galleryInput.files];
         galleryInput.value = "";
-        const accepted = selected.filter(file => file.size <= 100 * 1024 * 1024);
-        if (accepted.length !== selected.length) setStatus("Files larger than 100 MB were not added to the gallery.", "error");
+        const accepted = selected.filter(file => file.size <= 500 * 1024 * 1024);
+        if (accepted.length !== selected.length) setStatus("Files larger than 500 MB were not added to the gallery.", "error");
         const next = await Promise.all(accepted.map(async file => ({
             file,
             name: file.name,
