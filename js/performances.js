@@ -150,8 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
         span.setAttribute("aria-hidden", "true");
         span.innerHTML = `
             <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M7 12h10"></path>
-                <path d="M13 8l4 4-4 4"></path>
+                <path d="M8 5l7 7-7 7"></path>
             </svg>
         `;
         return span;

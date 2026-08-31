@@ -41,6 +41,14 @@
         return paragraph;
     }
 
+    function cardArrow() {
+        const arrow = document.createElement("span");
+        arrow.className = "home-card-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M8 5l7 7-7 7"></path></svg>';
+        return arrow;
+    }
+
     function card(record) {
         const performance = record.data || {};
         const article = document.createElement("article");
@@ -67,7 +75,7 @@
         const labels = arrangementLabels(performance);
         details.textContent = performance.arrangementsTbd ? "Arrangements TBD" : labels.length ? labels.join(" • ") : "Arrangement details coming soon";
         content.append(dateTime, location, details);
-        article.append(link, content);
+        article.append(link, content, cardArrow());
         return article;
     }
 

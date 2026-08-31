@@ -1634,3 +1634,39 @@ body.performance-detail-open {
 }
 .performance-public-card .performance-card-content { padding-right: 88px; }
 @media (max-width:520px) { .performance-public-card .performance-card-arrow { right:19px; bottom:19px; width:44px; height:44px; }.performance-public-card .performance-card-content { padding-right:76px; } }
+
+/* Match the permanent arrow used by public arrangement cards. */
+.performance-public-card .performance-card-arrow {
+    right: 30px;
+    bottom: 30px;
+    width: 52px;
+    height: 52px;
+    border-color: rgba(255, 255, 255, 0.38);
+    background: rgba(255, 255, 255, 0.13);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+}
+
+.performance-public-card .performance-card-arrow svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2;
+}
+
+.performance-public-card:hover .performance-card-arrow {
+    transform: none;
+    background: rgba(255, 255, 255, 0.13);
+}
+
+.performance-public-card .performance-card-content { padding-right: 104px; }
+
+@media (max-width: 520px) {
+    .performance-public-card .performance-card-arrow {
+        right: 20px;
+        bottom: 20px;
+        width: 46px;
+        height: 46px;
+    }
+
+    .performance-public-card .performance-card-content { padding-right: 82px; }
+}

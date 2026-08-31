@@ -2459,6 +2459,281 @@ body[data-admin-page="arrangements"] .admin-user-meta {
     white-space: nowrap;
 }
 
+/* ========================================
+   ABOUT + TEAM CONSISTENCY
+======================================== */
+body[data-admin-page="information"] .admin-nav [data-admin-page="information"] {
+    opacity: 1;
+}
+
+body[data-admin-page="information"] .admin-nav [data-admin-page="information"]::after {
+    position: absolute;
+    right: 0;
+    bottom: 4px;
+    left: 0;
+    height: 2px;
+    content: "";
+    border-radius: 999px;
+    background: var(--admin-maroon);
+}
+
+body:is(
+    [data-admin-page="dashboard"],
+    [data-admin-page="home-sections"],
+    [data-admin-page="performances"],
+    [data-admin-page="team"],
+    [data-admin-page="information"]
+) .admin-user-meta {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.information-page-editor::before { display: none; }
+
+.information-logo-actions .admin-submit,
+.team-image-editor-actions .admin-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    line-height: 1.2;
+}
+
+/* Keep every Team editor grid and rich-text surface inside the page width. */
+body[data-admin-page="team"] {
+    overflow-x: clip;
+}
+
+body[data-admin-page="team"] .admin-dashboard-main,
+.team-admin-form,
+.team-editor-panel,
+.team-editor-grid,
+.team-teacher-message-grid,
+.member-editor-list,
+.member-editor-card,
+.team-member-fields,
+.team-editor-panel .admin-field,
+.team-editor-panel .rich-editor,
+.team-editor-panel .rich-editor-toolbar,
+.team-editor-panel .rich-editor-surface {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.team-editor-panel {
+    width: 100%;
+    overflow: hidden;
+}
+
+.team-image-editor {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+    gap: 22px;
+    align-items: center;
+    margin: 0 0 30px;
+    padding: 18px;
+    border: 1px solid var(--admin-border, rgba(22, 22, 22, 0.1));
+    border-radius: 20px;
+    background: rgba(127, 127, 127, 0.04);
+}
+
+.team-image-editor > img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 14px;
+    background: var(--admin-bg, #ece9e5);
+}
+
+.team-image-editor-actions {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.team-image-editor-actions .admin-help-text { width: 100%; margin: 0; overflow-wrap: anywhere; }
+.team-teacher-image-editor { margin-bottom: 28px; }
+
+.team-teacher-message-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.team-teacher-message-grid .admin-field { gap: 4px; }
+.team-editor-panel .rich-editor-surface { overflow-wrap: anywhere; }
+
+.team-save-bar,
+.information-save-bar {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: max(16px, env(safe-area-inset-left));
+    z-index: 30000;
+    width: min(960px, calc(100% - 32px));
+    min-height: 72px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px 12px 22px;
+    border: 1px solid rgba(22, 22, 22, 0.12);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(calc(100% + 32px));
+    transition: opacity 240ms ease, transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.team-save-bar.is-visible,
+.information-save-bar.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.team-save-notice,
+.information-save-notice {
+    flex: 1;
+    min-width: 0;
+}
+
+.team-save-notice p,
+.information-save-notice p {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 0.94rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.team-save-notice p.is-saved,
+.information-save-notice p.is-saved { color: #23653b; }
+
+.team-save-bar .login-status,
+.information-save-bar .login-status {
+    display: none;
+    margin: 0;
+}
+
+.team-save-bar .login-status:not(:empty),
+.information-save-bar .login-status:not(:empty) {
+    display: block;
+    font-size: 0.82rem;
+}
+
+.team-revert-button,
+.information-revert-button {
+    min-height: 46px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: #1d1d1f;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 750;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.team-revert-button:hover,
+.team-revert-button:focus-visible,
+.information-revert-button:hover,
+.information-revert-button:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.team-revert-button:focus-visible,
+.information-revert-button:focus-visible {
+    outline: 3px solid var(--admin-maroon);
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+.team-save-spinner,
+.information-save-spinner {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.42);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: universal-admin-save-spin 0.75s linear infinite;
+}
+
+.team-save-bar .admin-submit.is-saving,
+.team-save-bar .admin-submit.is-saved,
+.information-save-bar .admin-submit.is-saving,
+.information-save-bar .admin-submit.is-saved {
+    display: inline-grid;
+    width: 52px;
+    min-width: 52px;
+    padding: 0;
+    place-items: center;
+}
+
+.team-save-bar .admin-submit.is-saved,
+.information-save-bar .admin-submit.is-saved { font-size: 1.35rem; }
+
+@keyframes universal-admin-save-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+    .team-image-editor,
+    .team-teacher-message-grid { grid-template-columns: 1fr; }
+
+    .team-save-bar,
+    .information-save-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .team-save-bar .admin-submit,
+    .team-revert-button,
+    .information-save-bar .admin-submit,
+    .information-revert-button { width: 100%; }
+}
+
+@media (prefers-color-scheme: dark) {
+    body:is(
+        [data-admin-page="dashboard"],
+        [data-admin-page="home-sections"],
+        [data-admin-page="performances"],
+        [data-admin-page="team"],
+        [data-admin-page="information"]
+    ) .admin-user-meta { background: transparent; }
+
+    .team-image-editor { background: transparent; }
+    .team-editor-panel .rich-editor { border-color: rgba(255, 255, 255, 0.14); background: #18181b; color: var(--admin-text); }
+    .team-editor-panel .rich-editor-toolbar { border-color: rgba(255, 255, 255, 0.11); background: #252529; }
+    .team-editor-panel .rich-editor-toolbar button { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.07); color: var(--admin-text); }
+    .team-editor-panel .rich-editor-surface { background: #18181b; color: var(--admin-text); color-scheme: dark; }
+    .member-editor-card { border-color: rgba(255, 255, 255, 0.11); background: transparent; }
+
+    .team-save-bar,
+    .information-save-bar {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(31, 31, 35, 0.94);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+    }
+
+    .team-save-notice p.is-saved,
+    .information-save-notice p.is-saved { color: #7be09a; }
+
+    .team-revert-button,
+    .information-revert-button { color: var(--admin-text); }
+}
+
 @media (max-width: 640px) {
     .performance-gallery-admin-item { align-items: flex-start; flex-direction: column; }
     .performance-gallery-admin-item .admin-danger-button { width: 100%; }

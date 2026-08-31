@@ -38,7 +38,11 @@
             const koreanName = document.createElement("p");
             koreanName.textContent = item.koreanName || "";
             content.append(heading, koreanName);
-            link.append(image, content);
+            const arrow = document.createElement("span");
+            arrow.className = "home-card-arrow";
+            arrow.setAttribute("aria-hidden", "true");
+            arrow.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M8 5l7 7-7 7"></path></svg>';
+            link.append(image, content, arrow);
             fragment.appendChild(link);
         });
         grid.replaceChildren(fragment);

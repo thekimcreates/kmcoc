@@ -11,17 +11,60 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("information-form");
   const status = document.getElementById("information-status");
   const save = document.getElementById("save-information");
+  const saveBar = document.getElementById("information-save-bar");
+  const saveMessage = document.getElementById("information-save-message");
+  const revertButton = document.getElementById("revert-information");
   const sectionsEditor = document.getElementById("information-sections-editor");
   const addSection = document.getElementById("add-information-section");
   const redirect = () => location.replace("login.html");
   let current = window.KMCSiteInformation?.fallback || {};
   let pending = { circle: null, full: null };
+  let savedTimer = null;
 
   const setStatus = (message = "", type = "") => {
     status.textContent = message;
     status.className = "login-status";
     if (type) status.classList.add(`is-${type}`);
   };
+
+  function setDirty(dirty = true) {
+    window.clearTimeout(savedTimer);
+    saveBar.classList.toggle("is-visible", dirty);
+    saveBar.setAttribute("aria-hidden", String(!dirty));
+    saveBar.inert = !dirty;
+    if (!dirty) return;
+    saveMessage.textContent = "Your changes are not saved. Press the button to save changes.";
+    saveMessage.classList.remove("is-saved");
+    revertButton.hidden = false;
+    save.disabled = false;
+    save.classList.remove("is-saving", "is-saved");
+    save.textContent = "Save Changes";
+    save.removeAttribute("aria-label");
+  }
+
+  function showSaving() {
+    saveBar.classList.add("is-visible");
+    saveBar.setAttribute("aria-hidden", "false");
+    saveBar.inert = false;
+    revertButton.hidden = true;
+    save.disabled = true;
+    save.classList.add("is-saving");
+    save.innerHTML = '<span class="information-save-spinner" aria-hidden="true"></span>';
+    save.setAttribute("aria-label", "Saving changes");
+  }
+
+  function showSaved() {
+    saveMessage.textContent = "Changes saved successfully.";
+    saveMessage.classList.add("is-saved");
+    setStatus();
+    revertButton.hidden = true;
+    save.classList.remove("is-saving");
+    save.classList.add("is-saved");
+    save.disabled = true;
+    save.textContent = "✓";
+    save.setAttribute("aria-label", "Changes saved successfully");
+    savedTimer = window.setTimeout(() => setDirty(false), 3000);
+  }
 
   function populate(data) {
     current = window.KMCSiteInformation.normalize(data);
@@ -78,6 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const next = readPublicPage().sections;
         next.splice(index, 1);
         renderPublicPageEditor(next);
+        setDirty();
       });
       header.append(title, remove);
       card.append(header);
@@ -87,7 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
       text.className = "information-section-text";
       text.rows = 4;
       text.maxLength = 1200;
-      text.placeholder = "Write the information visitors should know.";
+      text.placeholder = "Write what visitors should know.";
       text.value = section.text || "";
       card.append(createField("Text", text));
 
@@ -100,7 +144,10 @@ document.addEventListener("DOMContentLoaded", () => {
       (section.links || []).forEach(link => addLinkRow(links, link));
       card.append(links);
       const addLink = createButton("+ Add Link", "admin-secondary-button information-add-link");
-      addLink.addEventListener("click", () => addLinkRow(links, {}));
+      addLink.addEventListener("click", () => {
+        addLinkRow(links, {});
+        setDirty();
+      });
       card.append(addLink);
       sectionsEditor.append(card);
     });
@@ -114,7 +161,10 @@ document.addEventListener("DOMContentLoaded", () => {
       createInput("information-link-url", link.url, "https://… or mailto:…", "url")
     );
     const remove = createButton("Remove", "admin-link-remove");
-    remove.addEventListener("click", () => row.remove());
+    remove.addEventListener("click", () => {
+      row.remove();
+      setDirty();
+    });
     row.append(remove);
     container.append(row);
   }
@@ -154,7 +204,8 @@ document.addEventListener("DOMContentLoaded", () => {
       pending[kind] = result;
       setPreview(kind, URL.createObjectURL(result.blob));
       document.getElementById(`${kind}-logo-note`).textContent = optimizer.summary(result);
-      setStatus("Logo prepared. Press Save Information to publish it.", "success");
+      setDirty();
+      setStatus("Logo prepared. Press Save Changes to publish it.", "success");
     } catch (error) {
       console.error(error);
       setStatus(error.message || "Unable to prepare this image.", "error");
@@ -187,11 +238,12 @@ document.addEventListener("DOMContentLoaded", () => {
       email.textContent = user.email || "Administrator";
       const snap = await db.collection("siteContent").doc("information").get();
       populate(snap.exists ? snap.data() : window.KMCSiteInformation.fallback);
+      setDirty(false);
       loading.hidden = true;
       page.hidden = false;
     } catch (error) {
       console.error(error);
-      setStatus("Unable to load website information.", "error");
+      setStatus("Unable to load the About page settings.", "error");
     }
   });
 
@@ -201,24 +253,35 @@ document.addEventListener("DOMContentLoaded", () => {
       pending[kind] = null;
       setPreview(kind, current[`${kind}LogoUrl`] || `../assets/logo/${kind}.webp`);
       document.getElementById(`${kind}-logo-note`).textContent = "";
+      setDirty();
     });
   });
 
-  form.querySelectorAll("input, textarea").forEach(control => control.addEventListener("input", updateFooterPreview));
+  ["input", "change"].forEach(eventName => form.addEventListener(eventName, () => {
+    updateFooterPreview();
+    setDirty();
+  }));
   addSection.addEventListener("click", () => {
     const sections = readPublicPage().sections;
     sections.push({ title: "", text: "", links: [] });
     renderPublicPageEditor(sections);
+    setDirty();
   });
+  revertButton.addEventListener("click", () => window.location.reload());
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const contactEmail = document.getElementById("contact-email").value.trim();
-    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) return setStatus("Enter a valid contact email address.", "error");
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+      setDirty();
+      return setStatus("Enter a valid contact email address.", "error");
+    }
     const publicPage = readPublicPage();
     const invalidLink = publicPage.sections.flatMap(section => section.links).find(link => !link.label || !isSafePublicLink(link.url));
-    if (invalidLink) return setStatus("Each public link needs a label and a valid https, http, or mailto address.", "error");
-    save.disabled = true;
-    save.textContent = "Saving…";
+    if (invalidLink) {
+      setDirty();
+      return setStatus("Each public link needs a label and a valid https, http, or mailto address.", "error");
+    }
+    showSaving();
     try {
       const [circleLogoUrl, fullLogoUrl] = await Promise.all([
         uploadLogo("circle", pending.circle),
@@ -244,14 +307,12 @@ document.addEventListener("DOMContentLoaded", () => {
       pending = { circle: null, full: null };
       window.KMCSiteInformation.apply(current);
       try { localStorage.removeItem("kmc-shared-data-v1:site-information"); } catch (_) {}
-      await tools.logActivity(db, auth, "Updated", "information", "information", "Website information");
-      setStatus("Website information saved successfully.", "success");
+      await tools.logActivity(db, auth, "Updated", "information", "information", "Website About page");
+      showSaved();
     } catch (error) {
       console.error(error);
+      setDirty();
       setStatus("Unable to save. Check Firestore and Storage rules.", "error");
-    } finally {
-      save.disabled = false;
-      save.textContent = "Save Information";
     }
   });
 
