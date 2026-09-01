@@ -748,3 +748,48 @@ body.arrangement-open .navbar {
         animation-iteration-count: 1 !important;
     }
 }
+
+/* Match the compact proportions and type scale of public performance cards. */
+.arrangements-page .arrangement-page-card {
+    min-height: 360px;
+}
+
+.arrangements-page .arrangement-page-card .card-content {
+    right: 104px;
+    bottom: 34px;
+    left: 34px;
+}
+
+.arrangement-title {
+    font-size: clamp(1.75rem, 3.2vw, 2.65rem);
+    font-weight: 750;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+}
+
+.arrangement-korean {
+    margin-top: 10px;
+    font-size: clamp(0.86rem, 1.25vw, 1rem);
+    font-weight: 600;
+    line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+    .arrangements-page .arrangement-page-card { min-height: 360px; }
+}
+
+@media (max-width: 600px) {
+    .arrangements-page .arrangement-page-card { min-height: 360px; }
+
+    .arrangements-page .arrangement-page-card .card-content {
+        right: 82px;
+        bottom: 28px;
+        left: 28px;
+        padding-right: 0;
+    }
+
+    .arrangement-card-arrow {
+        right: 20px;
+        bottom: 20px;
+    }
+}
