@@ -65,6 +65,12 @@ document.addEventListener("DOMContentLoaded", () => {
         arrangements: "kmc-public-performance-arrangements-v2",
         members: "kmc-public-performance-members-v2"
     };
+    const GALLERY_CACHE_NAMES = {
+        thumbnails: "kmc-performance-gallery-thumbnails-v1",
+        fullImages: "kmc-performance-gallery-full-images-v1"
+    };
+    const galleryImageSources = new Map();
+    const galleryObjectUrls = new Set();
 
     if (!grid) return;
 
@@ -319,72 +325,82 @@ document.addEventListener("DOMContentLoaded", () => {
         return placeholder;
     }
 
-    function thumbnailLoads(url) {
-        return new Promise((resolve) => {
-            if (!url) return resolve(false);
-            const image = new Image();
-            image.onload = () => resolve(true);
-            image.onerror = () => resolve(false);
-            image.src = url;
+    async function cachedImageSource(url, cacheName) {
+        if (!url || /^(data:|blob:)/i.test(url)) return url || "";
+        const memoryKey = `${cacheName}:${url}`;
+        if (galleryImageSources.has(memoryKey)) return galleryImageSources.get(memoryKey);
+        try {
+            let response = null;
+            let cache = null;
+            if ("caches" in window) {
+                cache = await window.caches.open(cacheName);
+                response = await cache.match(url);
+            }
+            if (!response) {
+                response = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache" });
+                if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
+                if (cache) {
+                    try { await cache.put(url, response.clone()); } catch (_) { /* Browser cache remains available. */ }
+                }
+            }
+            const blob = await response.blob();
+            if (!blob.size || !/^image\//i.test(blob.type || "")) throw new Error("The cached response was not an image.");
+            const objectUrl = URL.createObjectURL(blob);
+            galleryImageSources.set(memoryKey, objectUrl);
+            galleryObjectUrls.add(objectUrl);
+            return objectUrl;
+        } catch (error) {
+            console.warn("Unable to cache gallery image:", error);
+            galleryImageSources.set(memoryKey, url);
+            return url;
+        }
+    }
+
+    function loadAndDecodeImage(image, source) {
+        return new Promise((resolve, reject) => {
+            image.onload = async () => {
+                try {
+                    if (typeof image.decode === "function") await image.decode();
+                } catch (_) { /* The load event still guarantees the transfer completed. */ }
+                resolve(image);
+            };
+            image.onerror = () => reject(new Error("This gallery image could not be loaded."));
+            image.src = source;
         });
     }
 
     async function resolveGalleryThumbnail(item) {
         const direct = galleryThumbnailFor(item);
-        if (direct && await thumbnailLoads(direct)) return direct;
+        if (direct) return cachedImageSource(direct, GALLERY_CACHE_NAMES.thumbnails);
         if (item?.thumbnailPath && storage) {
             try {
                 const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
-                if (await thumbnailLoads(refreshed)) return refreshed;
+                return cachedImageSource(refreshed, GALLERY_CACHE_NAMES.thumbnails);
             } catch (error) {
                 console.warn("Unable to load gallery preview:", error);
             }
         }
-        // Older gallery records predate generated previews. Until the admin
-        // page repairs those records, use the original photo so the gallery
-        // never becomes a wall of permanent placeholders.
-        if (!isGalleryVideo(item) && item?.url && await thumbnailLoads(item.url)) return item.url;
         return "";
-    }
-
-    function attachGalleryVideoFrame(container, item, placeholder, className = "") {
-        const video = document.createElement("video");
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "metadata";
-        video.setAttribute("aria-hidden", "true");
-        if (className) video.classList.add(className);
-        let revealed = false;
-        const reveal = () => {
-            if (revealed || !placeholder.isConnected) return;
-            revealed = true;
-            placeholder.replaceWith(video);
-        };
-        video.addEventListener("loadeddata", reveal, { once: true });
-        video.addEventListener("loadedmetadata", () => {
-            if (Number.isFinite(video.duration) && video.duration > 0.06) {
-                try { video.currentTime = Math.min(0.06, video.duration / 10); } catch (_) { /* Keep the first frame. */ }
-            }
-        }, { once: true });
-        video.addEventListener("seeked", reveal, { once: true });
-        video.src = item.url;
     }
 
     function attachGalleryThumbnail(container, item, className = "") {
         const placeholder = createGalleryPlaceholder(item);
         if (className) placeholder.classList.add(className);
         container.appendChild(placeholder);
-        const promise = resolveGalleryThumbnail(item).then((url) => {
-            if (!url) {
-                if (isGalleryVideo(item) && item?.url) attachGalleryVideoFrame(container, item, placeholder, className);
-                return "";
-            }
+        const promise = resolveGalleryThumbnail(item).then(async (url) => {
+            if (!url) return "";
             const image = document.createElement("img");
-            image.src = url;
             image.alt = "";
             image.decoding = "async";
+            image.loading = "lazy";
             if (className) image.classList.add(className);
-            placeholder.replaceWith(image);
+            try {
+                await loadAndDecodeImage(image, url);
+                if (placeholder.isConnected) placeholder.replaceWith(image);
+            } catch (error) {
+                console.warn("Unable to display gallery thumbnail:", error);
+                return "";
+            }
             return url;
         });
         return { placeholder, promise };
@@ -505,20 +521,30 @@ document.addEventListener("DOMContentLoaded", () => {
             const image = document.createElement("img");
             image.className = "performance-gallery-progressive-full";
             image.alt = item.name || "Performance gallery photo";
+            image.decoding = "async";
             galleryViewerMedia.appendChild(image);
-            image.addEventListener("load", () => {
-                if (loadToken !== activeGalleryLoadToken) return;
-                image.classList.add("is-loaded");
-                previewLayer.remove();
-            }, { once: true });
-            image.src = item.url;
+            (async () => {
+                try {
+                    // response.blob() resolves only after every byte has arrived.
+                    // Keep the thumbnail visible through both transfer and decode.
+                    const source = await cachedImageSource(item.url, GALLERY_CACHE_NAMES.fullImages);
+                    await loadAndDecodeImage(image, source);
+                    if (loadToken !== activeGalleryLoadToken) return;
+                    image.classList.add("is-loaded");
+                    previewLayer.remove();
+                } catch (error) {
+                    console.warn("Unable to load full gallery image:", error);
+                }
+            })();
             return;
         }
 
         const video = document.createElement("video");
         video.className = "performance-gallery-streaming-video";
         video.playsInline = true;
-        video.preload = "auto";
+        // Metadata plus play() lets the browser use HTTP range requests and
+        // buffer only what playback needs instead of downloading the file first.
+        video.preload = "metadata";
         thumbnail.promise.then((url) => {
             if (url && loadToken === activeGalleryLoadToken) video.poster = url;
         });
@@ -540,13 +566,21 @@ document.addEventListener("DOMContentLoaded", () => {
         video.addEventListener("play", syncVideoControls);
         video.addEventListener("pause", syncVideoControls);
         video.addEventListener("ended", syncVideoControls);
+        const revealVideoFrame = () => {
+            if (loadToken !== activeGalleryLoadToken) return;
+            video.classList.add("is-loaded");
+            previewLayer.remove();
+        };
         video.addEventListener("loadeddata", () => {
-            if (loadToken === activeGalleryLoadToken) video.classList.add("is-loaded");
+            if (typeof video.requestVideoFrameCallback !== "function") revealVideoFrame();
         });
         video.addEventListener("playing", () => {
             if (loadToken === activeGalleryLoadToken) {
-                video.classList.add("is-loaded");
-                previewLayer.remove();
+                if (typeof video.requestVideoFrameCallback === "function") {
+                    video.requestVideoFrameCallback(revealVideoFrame);
+                } else {
+                    revealVideoFrame();
+                }
             }
         });
         galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
