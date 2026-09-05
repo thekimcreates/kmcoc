@@ -331,85 +331,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function canvasToBlob(canvas, type, quality) {
-        return new Promise((resolve) => {
-            try {
-                canvas.toBlob((blob) => resolve(blob || null), type, quality);
-            } catch (_) {
-                resolve(null);
-            }
-        });
-    }
-
-    async function exportGalleryThumbnail(canvas) {
-        let blob = await canvasToBlob(canvas, "image/webp", 0.66);
-        if (blob?.size && blob.type === "image/webp") {
-            return { blob, extension: "webp", contentType: "image/webp", width: canvas.width, height: canvas.height };
-        }
-        blob = await canvasToBlob(canvas, "image/jpeg", 0.7);
-        if (!blob?.size) throw new Error("A preview image could not be created for this video.");
-        return { blob, extension: "jpg", contentType: "image/jpeg", width: canvas.width, height: canvas.height };
-    }
-
-    function createVideoThumbnail(source) {
-        return new Promise((resolve, reject) => {
-            const video = document.createElement("video");
-            const objectUrl = source instanceof Blob ? URL.createObjectURL(source) : "";
-            let settled = false;
-            let capturing = false;
-            const cleanup = () => {
-                video.pause();
-                video.removeAttribute("src");
-                video.load();
-                if (objectUrl) URL.revokeObjectURL(objectUrl);
-            };
-            const finish = (error, result) => {
-                if (settled) return;
-                settled = true;
-                window.clearTimeout(timeout);
-                cleanup();
-                if (error) reject(error);
-                else resolve(result);
-            };
-            const capture = async () => {
-                if (settled || capturing || video.readyState < 2 || video.seeking) return;
-                capturing = true;
-                try {
-                    const sourceWidth = video.videoWidth;
-                    const sourceHeight = video.videoHeight;
-                    if (!sourceWidth || !sourceHeight) throw new Error("The first video frame could not be read.");
-                    const scale = Math.min(1, 480 / sourceWidth, 480 / sourceHeight);
-                    const canvas = document.createElement("canvas");
-                    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-                    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-                    const context = canvas.getContext("2d", { alpha: false });
-                    if (!context) throw new Error("Video previews are not supported by this browser.");
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const exported = await exportGalleryThumbnail(canvas);
-                    canvas.width = 1;
-                    canvas.height = 1;
-                    finish(null, exported);
-                } catch (error) {
-                    finish(error);
-                }
-            };
-            const seekOrCapture = () => {
-                if (video.readyState >= 2) return capture();
-                const target = Number.isFinite(video.duration) && video.duration > 0
-                    ? Math.min(0.001, video.duration / 2) : 0;
-                try { video.currentTime = target; } catch (_) { /* Wait for loadeddata. */ }
-            };
-            const timeout = window.setTimeout(() => finish(new Error("The video preview took too long to prepare.")), 20000);
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = "auto";
-            if (!objectUrl) video.crossOrigin = "anonymous";
-            video.addEventListener("loadedmetadata", seekOrCapture, { once: true });
-            video.addEventListener("loadeddata", capture);
-            video.addEventListener("seeked", capture);
-            video.addEventListener("error", () => finish(new Error("This video could not be opened to create its first-frame preview.")), { once: true });
-            video.src = objectUrl || String(source || "");
-            video.load();
+    function createVideoThumbnail(source, item) {
+        return window.KMCVideoPreview.capture(source, {
+            maxEdge: 480, quality: 0.66, jpegQuality: 0.7,
+            resolveSource: item?.path && storage
+                ? () => storage.ref(item.path).getDownloadURL() : undefined
         });
     }
 
@@ -465,7 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         return isVideoFile(item)
-            ? createVideoThumbnail(item.url)
+            ? createVideoThumbnail(item.url, item)
             : createImageThumbnail(item.url);
     }
 

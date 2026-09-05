@@ -329,15 +329,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function createGalleryPlaceholder(item) {
         const placeholder = document.createElement("span");
         placeholder.className = "performance-gallery-placeholder";
-        if (isGalleryVideo(item)) {
-            // A still play symbol while the first-frame image is prepared;
-            // unavailable/unsupported videos must never spin indefinitely.
-            placeholder.innerHTML = '<svg width="32" height="32" viewBox="0 0 32 32" fill="#7f0020" aria-hidden="true"><path d="M11 6v20l16-10z"/></svg>';
-        } else {
-            const spinner = document.createElement("span");
-            spinner.className = "performance-gallery-loader";
-            placeholder.appendChild(spinner);
-        }
+        const spinner = document.createElement("span");
+        spinner.className = "performance-gallery-loader";
+        placeholder.appendChild(spinner);
         placeholder.setAttribute("aria-hidden", "true");
         return placeholder;
     }
@@ -429,64 +423,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return { blob: preview, width, height };
     }
 
-    function captureGalleryVideoPreview(url) {
-        return new Promise((resolve, reject) => {
-            const video = document.createElement("video");
-            let settled = false;
-            let capturing = false;
-            const finish = (error, result) => {
-                if (settled) return;
-                settled = true;
-                window.clearTimeout(timeout);
-                video.pause();
-                video.removeAttribute("src");
-                video.load();
-                if (error) reject(error);
-                else resolve(result);
-            };
-            const capture = async () => {
-                if (settled || capturing || video.readyState < 2 || video.seeking) return;
-                capturing = true;
-                try {
-                    const sourceWidth = video.videoWidth;
-                    const sourceHeight = video.videoHeight;
-                    if (!sourceWidth || !sourceHeight) throw new Error("The first video frame is unavailable.");
-                    const scale = Math.min(1, 360 / sourceWidth, 360 / sourceHeight);
-                    const width = Math.max(1, Math.round(sourceWidth * scale));
-                    const height = Math.max(1, Math.round(sourceHeight * scale));
-                    const canvas = document.createElement("canvas");
-                    canvas.width = width;
-                    canvas.height = height;
-                    const context = canvas.getContext("2d", { alpha: false });
-                    if (!context) throw new Error("Video previews are not supported by this browser.");
-                    context.drawImage(video, 0, 0, width, height);
-                    const blob = await exportGalleryPreview(canvas);
-                    canvas.width = 1;
-                    canvas.height = 1;
-                    finish(null, { blob, width, height });
-                } catch (error) {
-                    finish(error);
-                }
-            };
-            const requestFrame = () => {
-                // Trigger decoding near time zero without skipping ahead to a
-                // later frame. loadeddata also handles browsers that need no seek.
-                if (video.readyState >= 2) return capture();
-                const target = Number.isFinite(video.duration) && video.duration > 0
-                    ? Math.min(0.001, video.duration / 2) : 0;
-                try { video.currentTime = target; } catch (_) { /* Wait for loadeddata. */ }
-            };
-            const timeout = window.setTimeout(() => finish(new Error("The video preview took too long to load.")), 20000);
-            video.crossOrigin = "anonymous";
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = "auto";
-            video.addEventListener("loadedmetadata", requestFrame, { once: true });
-            video.addEventListener("loadeddata", capture);
-            video.addEventListener("seeked", capture);
-            video.addEventListener("error", () => finish(new Error("This video preview could not be loaded.")), { once: true });
-            video.src = url;
-            video.load();
+    function captureGalleryVideoPreview(url, item) {
+        return window.KMCVideoPreview.capture(url, {
+            maxEdge: 360, quality: 0.56, jpegQuality: 0.62,
+            resolveSource: item?.path && storage
+                ? () => storage.ref(item.path).getDownloadURL() : undefined
         });
     }
 
@@ -531,11 +472,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     width: Number(cached.headers.get("x-kmc-preview-width")) || 0,
                     height: Number(cached.headers.get("x-kmc-preview-height")) || 0
                 };
-            } else if (isGalleryVideo(item)) {
+            }
+            if (preview) {
+                try { await loadGalleryBlobImage(preview.blob); }
+                catch (_) { preview = null; cached = null; }
+            }
+            if (!preview && isGalleryVideo(item)) {
                 // Stop loading as soon as the first frame has been compressed.
                 // The browser can use byte ranges when the server supports them.
-                preview = await captureGalleryVideoPreview(url);
-            } else {
+                preview = await captureGalleryVideoPreview(url, item);
+            } else if (!preview) {
                 // Legacy records were saved without a thumbnail. Download the
                 // original once, create a tiny preview, and retain only that
                 // preview in the thumbnail cache for future gallery visits.
@@ -569,23 +515,37 @@ document.addEventListener("DOMContentLoaded", () => {
             return objectUrl;
         }).catch((error) => {
             console.warn("Unable to create a lightweight preview for this legacy gallery item:", error);
-            // Photos still render instead of remaining as placeholders. Videos
-            // never fall back to an image request for their full media file.
+            // Keep the spinner on failure. Allow another gallery opening to
+            // retry instead of memoizing a failed video preview for this visit.
+            if (isGalleryVideo(item)) galleryLegacyPreviewPromises.delete(url);
             return isGalleryVideo(item) ? "" : url;
         });
         galleryLegacyPreviewPromises.set(url, promise);
         return promise;
     }
 
-    function loadAndDecodeImage(image, source) {
+    function loadAndDecodeImage(image, source, timeoutMs = 0) {
         return new Promise((resolve, reject) => {
+            let settled = false;
+            let timer;
+            const finish = (error) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timer);
+                image.onload = image.onerror = null;
+                if (error) {
+                    image.removeAttribute("src");
+                    reject(error);
+                } else resolve(image);
+            };
             image.onload = async () => {
                 try {
                     if (typeof image.decode === "function") await image.decode();
                 } catch (_) { /* The load event still guarantees the transfer completed. */ }
-                resolve(image);
+                finish();
             };
-            image.onerror = () => reject(new Error("This gallery image could not be loaded."));
+            image.onerror = () => finish(new Error("This gallery image could not be loaded."));
+            if (timeoutMs) timer = window.setTimeout(() => finish(new Error("Gallery thumbnail timed out.")), timeoutMs);
             image.src = source;
         });
     }
@@ -626,8 +586,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 image.loading = "eager";
                 if (className) image.classList.add(className);
                 try {
-                    const source = await cachedImageSource(candidate, GALLERY_CACHE_NAMES.thumbnails);
-                    await loadAndDecodeImage(image, source);
+                    // Native image loading can display cross-origin thumbnails
+                    // even when a CORS fetch/cache request is unavailable.
+                    const source = candidate;
+                    await loadAndDecodeImage(image, source, 12000);
                     if (placeholder.isConnected) placeholder.replaceWith(image);
                     return source;
                 } catch (error) {
@@ -642,20 +604,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 image.loading = "eager";
                 if (className) image.classList.add(className);
                 try {
-                    await loadAndDecodeImage(image, fallback);
+                    await loadAndDecodeImage(image, fallback, 12000);
                     if (placeholder.isConnected) placeholder.replaceWith(image);
                     return fallback;
                 } catch (error) {
                     console.warn("Unable to display the generated gallery preview:", error);
                 }
             }
-            placeholder.replaceChildren();
-            placeholder.textContent = isGalleryVideo(item) ? "▶" : "Preview unavailable";
+            if (!isGalleryVideo(item)) {
+                placeholder.replaceChildren();
+                placeholder.textContent = "Preview unavailable";
+            }
             return "";
         })().catch((error) => {
             console.warn("Unable to prepare gallery thumbnail:", error);
-            placeholder.replaceChildren();
-            placeholder.textContent = isGalleryVideo(item) ? "▶" : "Preview unavailable";
+            if (!isGalleryVideo(item)) {
+                placeholder.replaceChildren();
+                placeholder.textContent = "Preview unavailable";
+            }
             return "";
         });
         return { placeholder, promise };
