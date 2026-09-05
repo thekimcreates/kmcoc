@@ -24,7 +24,7 @@
     >
 
     <link rel="stylesheet" href="css/style.css?v=20260830about1">
-    <link rel="stylesheet" href="css/performances.css?v=20260904gallery4">
+    <link rel="stylesheet" href="css/performances.css?v=20260904gallery5">
 </head>
 
 <body class="performances-page">
@@ -246,13 +246,19 @@
         <div id="performance-gallery-grid" class="performance-gallery-grid"></div>
     </section>
     <div id="performance-gallery-viewer" class="performance-gallery-viewer" role="dialog" aria-modal="true" aria-label="Expanded gallery media" hidden>
+        <div class="performance-gallery-viewer-backdrop" aria-hidden="true"></div>
         <button id="performance-gallery-viewer-close" class="performance-gallery-viewer-close" type="button" aria-label="Back to gallery">‹</button>
+        <button id="performance-gallery-viewer-previous" class="performance-gallery-viewer-navigation is-previous" type="button" aria-label="Previous gallery item">‹</button>
         <div id="performance-gallery-viewer-media" class="performance-gallery-viewer-media"></div>
+        <button id="performance-gallery-viewer-next" class="performance-gallery-viewer-navigation is-next" type="button" aria-label="Next gallery item">›</button>
         <div id="performance-gallery-video-controls" class="performance-gallery-video-controls" hidden>
             <button id="performance-gallery-video-toggle" type="button" aria-label="Play video"><span class="gallery-play-icon" aria-hidden="true"></span></button>
             <span id="performance-gallery-video-elapsed">0:00</span>
             <input id="performance-gallery-video-progress" type="range" min="0" max="100" value="0" aria-label="Video progress">
             <span id="performance-gallery-video-duration">0:00</span>
+        </div>
+        <div id="performance-gallery-filmstrip" class="performance-gallery-filmstrip" aria-label="Gallery items">
+            <div id="performance-gallery-filmstrip-track" class="performance-gallery-filmstrip-track" role="listbox"></div>
         </div>
     </div>
 </div>
@@ -278,12 +284,13 @@
 
 <script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
 <script defer src="js/public.bundle.js?v=20260725p3e"></script><script defer src="js/site-information.js?v=20260725p3a"></script>
 
 
 
 
-<script defer src="js/performances.js?v=20260904gallery4"></script>
+<script defer src="js/performances.js?v=20260904gallery5"></script>
 
 </body>
 </html>

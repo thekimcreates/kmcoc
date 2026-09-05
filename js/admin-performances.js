@@ -115,6 +115,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let galleryItems = [];
     let pendingGalleryFiles = [];
     let galleryPathsToDelete = [];
+    const thumbnailRepairAttempted = new Set();
+    let thumbnailRepairRunning = false;
 
     const returnToLogin = () => location.replace("login.html");
     if (!auth || !db || !storage) {
@@ -435,7 +437,12 @@ document.addEventListener("DOMContentLoaded", () => {
             contentType: thumbnail.contentType,
             cacheControl: "public,max-age=31536000,immutable"
         });
-        return { thumbnailUrl: await snapshot.ref.getDownloadURL(), thumbnailPath: path };
+        return {
+            thumbnailUrl: await snapshot.ref.getDownloadURL(),
+            thumbnailPath: path,
+            thumbnailWidth: Number(thumbnail.width) || 0,
+            thumbnailHeight: Number(thumbnail.height) || 0
+        };
     }
 
     async function ensureGalleryThumbnails(documentId, items) {
@@ -469,6 +476,32 @@ document.addEventListener("DOMContentLoaded", () => {
         const workerCount = Math.min(3, items.length);
         await Promise.all(Array.from({ length: workerCount }, () => prepareNext()));
         return nextItems;
+    }
+
+    async function repairMissingGalleryThumbnails(records) {
+        if (thumbnailRepairRunning) return;
+        thumbnailRepairRunning = true;
+        try {
+            for (const record of records) {
+                const items = Array.isArray(record.galleryItems) ? record.galleryItems : [];
+                const needsRepair = items.some(item => item?.url && !item.thumbnailUrl);
+                if (!record.id || !needsRepair || thumbnailRepairAttempted.has(record.id)) continue;
+                thumbnailRepairAttempted.add(record.id);
+                const repaired = await ensureGalleryThumbnails(record.id, items);
+                const repairedCount = repaired.filter(item => item.thumbnailUrl).length;
+                const originalCount = items.filter(item => item.thumbnailUrl).length;
+                if (repairedCount > originalCount) {
+                    await db.collection("performances").doc(record.id).update({
+                        galleryItems: sortGalleryItems(repaired),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
+        } catch (error) {
+            console.warn("Unable to finish repairing gallery previews:", error);
+        } finally {
+            thumbnailRepairRunning = false;
+        }
     }
 
     function renderGalleryFiles() {
@@ -759,6 +792,7 @@ document.addEventListener("DOMContentLoaded", () => {
         unsubscribePerformances = db.collection("performances").orderBy("date", "desc").onSnapshot((snapshot) => {
             performanceRecords = snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
             renderPerformances();
+            repairMissingGalleryThumbnails(performanceRecords);
         }, (error) => {
             console.error("Unable to load performances:", error);
             empty.hidden = false;

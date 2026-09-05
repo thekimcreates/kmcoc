@@ -2,6 +2,7 @@
 
 document.addEventListener("DOMContentLoaded", () => {
     const db = window.kmcFirebase?.db;
+    const storage = window.kmcFirebase?.storage;
     const dataStore = window.KMCDataStore;
     const grid = document.getElementById("performances-grid");
     const emptyState = document.getElementById("performance-empty");
@@ -37,12 +38,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const galleryGrid = document.getElementById("performance-gallery-grid");
     const galleryViewer = document.getElementById("performance-gallery-viewer");
     const galleryViewerClose = document.getElementById("performance-gallery-viewer-close");
+    const galleryViewerPrevious = document.getElementById("performance-gallery-viewer-previous");
+    const galleryViewerNext = document.getElementById("performance-gallery-viewer-next");
     const galleryViewerMedia = document.getElementById("performance-gallery-viewer-media");
     const galleryVideoControls = document.getElementById("performance-gallery-video-controls");
     const galleryVideoToggle = document.getElementById("performance-gallery-video-toggle");
     const galleryVideoProgress = document.getElementById("performance-gallery-video-progress");
     const galleryVideoElapsed = document.getElementById("performance-gallery-video-elapsed");
     const galleryVideoDuration = document.getElementById("performance-gallery-video-duration");
+    const galleryFilmstripTrack = document.getElementById("performance-gallery-filmstrip-track");
 
     let records = [];
     let arrangementRecords = [];
@@ -53,6 +57,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let galleryRecord = null;
     let activeGalleryVideo = null;
     let activeGalleryLoadToken = 0;
+    let activeGalleryIndex = -1;
+    let galleryTransitioning = false;
     const selectedArrangements = new Set();
     const CACHE_KEYS = {
         performances: "kmc-public-performances-v2",
@@ -302,7 +308,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function galleryThumbnailFor(item) {
-        return item?.thumbnailUrl || item?.previewUrl || "";
+        return item?.thumbnailUrl || item?.thumbnailURL || item?.thumbUrl || item?.previewUrl || item?.thumbnailDataUrl || "";
     }
 
     function createGalleryPlaceholder(item) {
@@ -313,22 +319,53 @@ document.addEventListener("DOMContentLoaded", () => {
         return placeholder;
     }
 
-    function createGalleryTile(item, className) {
+    function thumbnailLoads(url) {
+        return new Promise((resolve) => {
+            if (!url) return resolve(false);
+            const image = new Image();
+            image.onload = () => resolve(true);
+            image.onerror = () => resolve(false);
+            image.src = url;
+        });
+    }
+
+    async function resolveGalleryThumbnail(item) {
+        const direct = galleryThumbnailFor(item);
+        if (direct && await thumbnailLoads(direct)) return direct;
+        if (!item?.thumbnailPath || !storage) return "";
+        try {
+            const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
+            return await thumbnailLoads(refreshed) ? refreshed : "";
+        } catch (error) {
+            console.warn("Unable to load gallery preview:", error);
+            return "";
+        }
+    }
+
+    function attachGalleryThumbnail(container, item, className = "") {
+        const placeholder = createGalleryPlaceholder(item);
+        if (className) placeholder.classList.add(className);
+        container.appendChild(placeholder);
+        const promise = resolveGalleryThumbnail(item).then((url) => {
+            if (!url) return "";
+            const image = document.createElement("img");
+            image.src = url;
+            image.alt = "";
+            image.decoding = "async";
+            if (className) image.classList.add(className);
+            placeholder.replaceWith(image);
+            return url;
+        });
+        return { placeholder, promise };
+    }
+
+    function createGalleryTile(item, className, index) {
         const tile = document.createElement("button");
         tile.type = "button";
         tile.className = className;
+        tile.dataset.galleryIndex = String(index);
         tile.setAttribute("aria-label", `Open ${item.name || (isGalleryVideo(item) ? "video" : "photo")}`);
-        const thumbnailUrl = galleryThumbnailFor(item);
-        if (thumbnailUrl) {
-            const image = document.createElement("img");
-            image.src = thumbnailUrl;
-            image.alt = "";
-            image.loading = "lazy";
-            image.decoding = "async";
-            tile.appendChild(image);
-        } else {
-            tile.appendChild(createGalleryPlaceholder(item));
-        }
+        attachGalleryThumbnail(tile, item);
         if (isGalleryVideo(item)) {
             const badge = document.createElement("span");
             badge.className = "performance-gallery-video-badge";
@@ -345,45 +382,92 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!items.length) return;
         galleryRecord = record;
         galleryPreview.replaceChildren(...items.slice(0, 16).map((item, index) => {
-            const tile = createGalleryTile(item, "performance-gallery-preview-tile");
-            tile.addEventListener("click", () => openGallery(record, index));
+            const tile = createGalleryTile(item, "performance-gallery-preview-tile", index);
+            tile.addEventListener("click", () => openGallery(record, index, tile));
             return tile;
         }));
     }
 
-    function closeGalleryViewer() {
+    function waitForAnimationFrames(count = 1) {
+        return new Promise((resolve) => {
+            const next = () => count-- > 1 ? requestAnimationFrame(next) : requestAnimationFrame(resolve);
+            next();
+        });
+    }
+
+    function stopActiveGalleryVideo() {
         activeGalleryLoadToken += 1;
         activeGalleryVideo?.pause();
-        if (activeGalleryVideo) activeGalleryVideo.removeAttribute("src");
+        if (activeGalleryVideo) {
+            activeGalleryVideo.removeAttribute("src");
+            activeGalleryVideo.load();
+        }
         activeGalleryVideo = null;
-        galleryViewer.classList.remove("is-visible");
-        galleryModal?.classList.remove("is-viewing");
-        document.body.classList.remove("performance-gallery-viewer-open");
-        galleryViewer.hidden = true;
-        galleryViewerMedia.replaceChildren();
         galleryVideoControls.hidden = true;
         galleryVideoToggle.classList.remove("is-playing");
     }
 
-    function openGalleryViewer(index) {
+    function hideGalleryViewerImmediately() {
+        stopActiveGalleryVideo();
+        galleryViewer.classList.remove("is-visible");
+        galleryViewer.classList.remove("is-content-visible");
+        galleryModal?.classList.remove("is-viewing");
+        document.body.classList.remove("performance-gallery-viewer-open");
+        galleryViewer.hidden = true;
+        galleryViewerMedia.replaceChildren();
+        galleryFilmstripTrack.replaceChildren();
+        activeGalleryIndex = -1;
+        galleryTransitioning = false;
+    }
+
+    function updateViewerNavigation() {
+        const items = galleryItemsFor(galleryRecord);
+        galleryViewerPrevious.hidden = activeGalleryIndex <= 0;
+        galleryViewerNext.hidden = activeGalleryIndex < 0 || activeGalleryIndex >= items.length - 1;
+    }
+
+    function centerFilmstripItem(index, smooth = true) {
+        requestAnimationFrame(() => {
+            const selected = galleryFilmstripTrack.querySelector(`[data-gallery-index="${index}"]`);
+            if (!selected) return;
+            const left = selected.offsetLeft + selected.offsetWidth / 2 - galleryFilmstripTrack.clientWidth / 2;
+            galleryFilmstripTrack.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
+        });
+    }
+
+    function updateFilmstripSelection(index, smooth = true) {
+        galleryFilmstripTrack.querySelectorAll(".performance-gallery-filmstrip-item").forEach((button) => {
+            const selected = Number(button.dataset.galleryIndex) === index;
+            button.classList.toggle("is-selected", selected);
+            button.setAttribute("aria-selected", String(selected));
+            button.tabIndex = selected ? 0 : -1;
+        });
+        centerFilmstripItem(index, smooth);
+    }
+
+    function renderGalleryFilmstrip() {
+        const items = galleryItemsFor(galleryRecord);
+        galleryFilmstripTrack.replaceChildren(...items.map((item, index) => {
+            const button = createGalleryTile(item, "performance-gallery-filmstrip-item", index);
+            button.setAttribute("role", "option");
+            button.addEventListener("click", () => selectGalleryItem(index));
+            return button;
+        }));
+    }
+
+    function renderExpandedGalleryItem(index) {
         const item = galleryItemsFor(galleryRecord)[index];
         if (!item) return;
-        closeGalleryViewer();
+        stopActiveGalleryVideo();
+        activeGalleryIndex = index;
         const loadToken = activeGalleryLoadToken;
-        galleryViewer.hidden = false;
-        galleryModal.classList.add("is-viewing");
-        document.body.classList.add("performance-gallery-viewer-open");
-        requestAnimationFrame(() => galleryViewer.classList.add("is-visible"));
-
-        const thumbnailUrl = galleryThumbnailFor(item);
-        const preview = thumbnailUrl ? document.createElement("img") : createGalleryPlaceholder(item);
-        preview.classList.add("performance-gallery-progressive-preview");
-        if (thumbnailUrl) {
-            preview.src = thumbnailUrl;
-            preview.alt = "";
-            preview.decoding = "async";
-        }
-        galleryViewerMedia.appendChild(preview);
+        galleryViewerMedia.replaceChildren();
+        const previewLayer = document.createElement("div");
+        previewLayer.className = "performance-gallery-progressive-preview";
+        const thumbnail = attachGalleryThumbnail(previewLayer, item);
+        galleryViewerMedia.appendChild(previewLayer);
+        updateViewerNavigation();
+        updateFilmstripSelection(index, galleryViewer.classList.contains("is-content-visible"));
 
         if (!isGalleryVideo(item)) {
             const image = document.createElement("img");
@@ -393,7 +477,7 @@ document.addEventListener("DOMContentLoaded", () => {
             image.addEventListener("load", () => {
                 if (loadToken !== activeGalleryLoadToken) return;
                 image.classList.add("is-loaded");
-                preview.classList.add("is-faded");
+                previewLayer.classList.add("is-faded");
             }, { once: true });
             image.src = item.url;
             return;
@@ -403,7 +487,9 @@ document.addEventListener("DOMContentLoaded", () => {
         video.className = "performance-gallery-streaming-video";
         video.playsInline = true;
         video.preload = "auto";
-        if (thumbnailUrl) video.poster = thumbnailUrl;
+        thumbnail.promise.then((url) => {
+            if (url && loadToken === activeGalleryLoadToken) video.poster = url;
+        });
         galleryViewerMedia.appendChild(video);
         activeGalleryVideo = video;
         galleryVideoControls.hidden = false;
@@ -422,8 +508,14 @@ document.addEventListener("DOMContentLoaded", () => {
         video.addEventListener("play", syncVideoControls);
         video.addEventListener("pause", syncVideoControls);
         video.addEventListener("ended", syncVideoControls);
+        video.addEventListener("loadeddata", () => {
+            if (loadToken === activeGalleryLoadToken) video.classList.add("is-loaded");
+        });
         video.addEventListener("playing", () => {
-            if (loadToken === activeGalleryLoadToken) preview.classList.add("is-faded");
+            if (loadToken === activeGalleryLoadToken) {
+                video.classList.add("is-loaded");
+                previewLayer.classList.add("is-faded");
+            }
         });
         galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
         galleryVideoProgress.oninput = () => {
@@ -434,29 +526,158 @@ document.addEventListener("DOMContentLoaded", () => {
         video.play().catch(syncVideoControls);
     }
 
-    function openGallery(record, initialIndex = null) {
+    function galleryAspectRatio(item, visual = null) {
+        const width = Number(item?.thumbnailWidth) || Number(visual?.naturalWidth) || 1;
+        const height = Number(item?.thumbnailHeight) || Number(visual?.naturalHeight) || 1;
+        return width > 0 && height > 0 ? width / height : 1;
+    }
+
+    function containedMediaRect(item, visual = null) {
+        const stage = galleryViewerMedia.getBoundingClientRect();
+        const ratio = galleryAspectRatio(item, visual);
+        let width = stage.width;
+        let height = width / ratio;
+        if (height > stage.height) {
+            height = stage.height;
+            width = height * ratio;
+        }
+        return {
+            left: stage.left + (stage.width - width) / 2,
+            top: stage.top + (stage.height - height) / 2,
+            width,
+            height
+        };
+    }
+
+    function createSharedMediaProxy(tile, item) {
+        const sourceVisual = tile?.querySelector("img, .performance-gallery-placeholder");
+        const proxy = sourceVisual?.cloneNode(true) || createGalleryPlaceholder(item);
+        proxy.classList.add("performance-gallery-shared-media");
+        if (proxy instanceof HTMLImageElement) {
+            proxy.removeAttribute("loading");
+            proxy.alt = "";
+        }
+        document.body.appendChild(proxy);
+        return { proxy, sourceVisual };
+    }
+
+    function setProxyRect(proxy, rect) {
+        proxy.style.left = `${rect.left}px`;
+        proxy.style.top = `${rect.top}px`;
+        proxy.style.width = `${rect.width}px`;
+        proxy.style.height = `${rect.height}px`;
+    }
+
+    async function animateSharedMedia(proxy, from, to, opening) {
+        setProxyRect(proxy, from);
+        if (!proxy.animate) {
+            setProxyRect(proxy, to);
+            await new Promise(resolve => window.setTimeout(resolve, 420));
+            return;
+        }
+        const animation = proxy.animate([
+            {
+                left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`,
+                borderRadius: opening ? "0px" : "2px"
+            },
+            {
+                left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px`,
+                borderRadius: opening ? "2px" : "0px"
+            }
+        ], {
+            duration: 470,
+            easing: "cubic-bezier(.22,1,.36,1)",
+            fill: "forwards"
+        });
+        try { await animation.finished; } catch (_) { /* Animation was interrupted. */ }
+    }
+
+    async function openGalleryViewer(index, sourceTile = null) {
+        const item = galleryItemsFor(galleryRecord)[index];
+        if (!item || galleryTransitioning) return;
+        if (!galleryViewer.hidden) return selectGalleryItem(index);
+        galleryTransitioning = true;
+        galleryViewer.hidden = false;
+        galleryModal.classList.add("is-viewing");
+        document.body.classList.add("performance-gallery-viewer-open");
+        renderGalleryFilmstrip();
+        renderExpandedGalleryItem(index);
+        await waitForAnimationFrames(2);
+
+        const tile = sourceTile || galleryGrid.querySelector(`[data-gallery-index="${index}"]`);
+        const from = tile?.getBoundingClientRect();
+        const { proxy, sourceVisual } = createSharedMediaProxy(tile, item);
+        const to = containedMediaRect(item, sourceVisual);
+        galleryViewer.classList.add("is-visible");
+        if (from?.width && from?.height) await animateSharedMedia(proxy, from, to, true);
+        proxy.remove();
+        galleryViewer.classList.add("is-content-visible");
+        galleryTransitioning = false;
+        galleryViewerClose.focus({ preventScroll: true });
+    }
+
+    async function selectGalleryItem(index) {
+        const items = galleryItemsFor(galleryRecord);
+        if (galleryTransitioning || index < 0 || index >= items.length || index === activeGalleryIndex) return;
+        galleryTransitioning = true;
+        const outgoing = galleryViewerMedia.animate?.([
+            { opacity: 1, transform: "scale(1)" },
+            { opacity: 0, transform: "scale(.985)" }
+        ], { duration: 120, easing: "ease-out", fill: "forwards" });
+        try { await outgoing?.finished; } catch (_) { /* Selection changed quickly. */ }
+        renderExpandedGalleryItem(index);
+        const incoming = galleryViewerMedia.animate?.([
+            { opacity: 0, transform: "scale(1.015)" },
+            { opacity: 1, transform: "scale(1)" }
+        ], { duration: 220, easing: "cubic-bezier(.22,1,.36,1)" });
+        try { await incoming?.finished; } catch (_) { /* Selection changed quickly. */ }
+        galleryTransitioning = false;
+    }
+
+    async function closeGalleryViewer() {
+        if (galleryViewer.hidden || galleryTransitioning) return;
+        galleryTransitioning = true;
+        activeGalleryVideo?.pause();
+        const item = galleryItemsFor(galleryRecord)[activeGalleryIndex];
+        const tile = galleryGrid.querySelector(`[data-gallery-index="${activeGalleryIndex}"]`);
+        tile?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        await waitForAnimationFrames(2);
+
+        const target = tile?.getBoundingClientRect();
+        const { proxy, sourceVisual } = createSharedMediaProxy(tile, item);
+        const from = containedMediaRect(item, sourceVisual);
+        galleryViewer.classList.remove("is-content-visible");
+        galleryViewer.classList.remove("is-visible");
+        if (target?.width && target?.height) await animateSharedMedia(proxy, from, target, false);
+        else await new Promise(resolve => window.setTimeout(resolve, 420));
+        proxy.remove();
+        hideGalleryViewerImmediately();
+        tile?.focus({ preventScroll: true });
+    }
+
+    function openGallery(record, initialIndex = null, sourceTile = null) {
         if (!galleryModal) return;
         galleryRecord = record;
         const items = galleryItemsFor(record);
         if (!items.length) return;
-        closeGalleryViewer();
+        hideGalleryViewerImmediately();
         galleryModalTitle.textContent = `${getLocation(record)} ${formatGalleryDate(record.date)} - Gallery`;
         galleryGrid.replaceChildren(...items.map((item, index) => {
-            const tile = createGalleryTile(item, "performance-gallery-tile");
-            tile.addEventListener("click", () => openGalleryViewer(index));
+            const tile = createGalleryTile(item, "performance-gallery-tile", index);
+            tile.addEventListener("click", () => openGalleryViewer(index, tile));
             return tile;
         }));
         galleryModal.hidden = false;
         galleryModal.setAttribute("aria-hidden", "false");
         document.body.classList.add("performance-gallery-open");
         requestAnimationFrame(() => galleryModal.classList.add("is-open"));
-        if (Number.isInteger(initialIndex)) openGalleryViewer(initialIndex);
+        if (Number.isInteger(initialIndex)) openGalleryViewer(initialIndex, sourceTile);
         else galleryModalClose.focus({ preventScroll: true });
     }
 
     function closeGallery() {
         if (!galleryModal || galleryModal.hidden) return;
-        closeGalleryViewer();
+        hideGalleryViewerImmediately();
         galleryModal.classList.remove("is-open");
         document.body.classList.remove("performance-gallery-open");
         window.setTimeout(() => {
@@ -823,6 +1044,8 @@ document.addEventListener("DOMContentLoaded", () => {
     galleryModalClose?.addEventListener("click", closeGallery);
     galleryModal?.querySelector(".performance-gallery-modal-backdrop")?.addEventListener("click", closeGallery);
     galleryViewerClose?.addEventListener("click", closeGalleryViewer);
+    galleryViewerPrevious?.addEventListener("click", () => selectGalleryItem(activeGalleryIndex - 1));
+    galleryViewerNext?.addEventListener("click", () => selectGalleryItem(activeGalleryIndex + 1));
     yearFilter.addEventListener("change", render);
 
     arrangementTrigger?.addEventListener("click", toggleArrangementPopover);
@@ -842,6 +1065,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.addEventListener("keydown", (event) => {
+        if (!galleryViewer?.hidden && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+            event.preventDefault();
+            const direction = event.key === "ArrowLeft" ? -1 : 1;
+            selectGalleryItem(activeGalleryIndex + direction);
+            return;
+        }
         if (!galleryModal?.hidden && event.key === "Escape") {
             event.preventDefault();
             if (!galleryViewer.hidden) closeGalleryViewer();
