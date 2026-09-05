@@ -39,6 +39,9 @@
     <link rel="stylesheet" href="css/home-mobile-polish.css?v=20260725p2e">
 
 <link rel="stylesheet" href="css/site-polish.css?v=20260905polish1">
+    <link rel="stylesheet" href="css/home-logo.css?v=20260905logo1">
+    <link rel="preload" as="image" href="assets/logo/kmc-gugak-animated-source.png">
+    <script defer src="js/home-logo.js?v=20260905logo1"></script>
 </head>
 
 
@@ -225,8 +228,14 @@
     <div class="hero-content">
 
 
-        <h1>
-            KMC Gugak
+        <h1 class="hero-logo-title" aria-label="KMC Gugak">
+            <span class="hero-logo-stage">
+                <img id="home-logo-fallback" class="hero-logo-fallback"
+                    src="assets/logo/kmc-gugak-animated-source.png"
+                    alt="" width="1044" height="391" fetchpriority="high">
+                <canvas id="home-logo-canvas" width="1280" height="480"
+                    aria-hidden="true" hidden></canvas>
+            </span>
         </h1>
 
 

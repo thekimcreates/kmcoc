@@ -1,0 +1,42 @@
+/* Homepage-only logo; the existing hero photos remain visible through the canvas. */
+#hero .hero-content {
+    width: min(100%, 1180px);
+    pointer-events: none;
+}
+
+#hero .hero-content .hero-logo-title {
+    width: min(100%, 1050px);
+    margin: 0 auto;
+    font-size: inherit;
+    line-height: 1;
+    letter-spacing: normal;
+}
+
+.hero-logo-stage {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 8 / 3;
+    filter: drop-shadow(0 3px 12px rgba(0, 0, 0, .25));
+}
+
+.hero-logo-stage canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: transparent;
+}
+
+.hero-logo-fallback {
+    position: absolute;
+    top: 4.3833%;
+    left: 4.20625%;
+    width: 91.35%;
+    height: auto;
+}
+
+.hero-logo-stage > [hidden] { display: none; }
+
+@media (max-width: 600px) {
+    #hero .hero-content { padding-inline: 28px; }
+}
