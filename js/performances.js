@@ -71,6 +71,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const galleryImageSources = new Map();
     const galleryObjectUrls = new Set();
+    const galleryLegacyPreviewPromises = new Map();
+    const galleryLegacyPreviewQueue = [];
+    let galleryLegacyPreviewWorkers = 0;
 
     if (!grid) return;
 
@@ -362,6 +365,207 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function exportGalleryPreview(canvas) {
+        return new Promise((resolve, reject) => {
+            const finish = (blob) => {
+                if (blob?.size) return resolve(blob);
+                canvas.toBlob((fallback) => fallback?.size
+                    ? resolve(fallback)
+                    : reject(new Error("This gallery preview could not be created.")), "image/jpeg", 0.62);
+            };
+            try {
+                canvas.toBlob(finish, "image/webp", 0.56);
+            } catch (_) {
+                finish(null);
+            }
+        });
+    }
+
+    function loadGalleryBlobImage(blob) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            const objectUrl = URL.createObjectURL(blob);
+            image.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                resolve(image);
+            };
+            image.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error("This gallery photo could not be decoded."));
+            };
+            image.src = objectUrl;
+        });
+    }
+
+    async function compactGalleryImageBlob(blob) {
+        const image = await loadGalleryBlobImage(blob);
+        const sourceWidth = image.naturalWidth || image.width;
+        const sourceHeight = image.naturalHeight || image.height;
+        if (!sourceWidth || !sourceHeight) throw new Error("This gallery photo has no readable dimensions.");
+        const scale = Math.min(1, 360 / sourceWidth, 360 / sourceHeight);
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("Gallery previews are not supported by this browser.");
+        context.fillStyle = "#000";
+        context.fillRect(0, 0, width, height);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, width, height);
+        const preview = await exportGalleryPreview(canvas);
+        canvas.width = 1;
+        canvas.height = 1;
+        return { blob: preview, width, height };
+    }
+
+    function captureGalleryVideoPreview(url) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement("video");
+            let settled = false;
+            const finish = (error, result) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timeout);
+                video.pause();
+                video.removeAttribute("src");
+                video.load();
+                if (error) reject(error);
+                else resolve(result);
+            };
+            const capture = async () => {
+                try {
+                    const sourceWidth = video.videoWidth;
+                    const sourceHeight = video.videoHeight;
+                    if (!sourceWidth || !sourceHeight) throw new Error("The first video frame is unavailable.");
+                    const scale = Math.min(1, 360 / sourceWidth, 360 / sourceHeight);
+                    const width = Math.max(1, Math.round(sourceWidth * scale));
+                    const height = Math.max(1, Math.round(sourceHeight * scale));
+                    const canvas = document.createElement("canvas");
+                    canvas.width = width;
+                    canvas.height = height;
+                    const context = canvas.getContext("2d", { alpha: false });
+                    if (!context) throw new Error("Video previews are not supported by this browser.");
+                    context.drawImage(video, 0, 0, width, height);
+                    const blob = await exportGalleryPreview(canvas);
+                    canvas.width = 1;
+                    canvas.height = 1;
+                    finish(null, { blob, width, height });
+                } catch (error) {
+                    finish(error);
+                }
+            };
+            const requestFrame = () => {
+                const target = Number.isFinite(video.duration) && video.duration > 0.08
+                    ? Math.min(0.08, video.duration / 10)
+                    : 0;
+                if (!target) {
+                    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return capture();
+                    video.addEventListener("loadeddata", capture, { once: true });
+                    return;
+                }
+                video.addEventListener("seeked", capture, { once: true });
+                try { video.currentTime = target; } catch (_) { capture(); }
+            };
+            const timeout = window.setTimeout(() => finish(new Error("The video preview took too long to load.")), 20000);
+            video.crossOrigin = "anonymous";
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.addEventListener("loadedmetadata", requestFrame, { once: true });
+            video.addEventListener("error", () => finish(new Error("This video preview could not be loaded.")), { once: true });
+            video.src = url;
+            video.load();
+        });
+    }
+
+    function runGalleryLegacyPreviewQueue() {
+        while (galleryLegacyPreviewWorkers < 3 && galleryLegacyPreviewQueue.length) {
+            const job = galleryLegacyPreviewQueue.shift();
+            galleryLegacyPreviewWorkers += 1;
+            Promise.resolve().then(job.task).then(job.resolve, job.reject).finally(() => {
+                galleryLegacyPreviewWorkers -= 1;
+                runGalleryLegacyPreviewQueue();
+            });
+        }
+    }
+
+    function queueGalleryLegacyPreview(task) {
+        return new Promise((resolve, reject) => {
+            galleryLegacyPreviewQueue.push({ task, resolve, reject });
+            runGalleryLegacyPreviewQueue();
+        });
+    }
+
+    function resolveLegacyGalleryPreview(item) {
+        const url = String(item?.url || "").trim();
+        if (!url) return Promise.resolve("");
+        if (galleryLegacyPreviewPromises.has(url)) return galleryLegacyPreviewPromises.get(url);
+        const promise = queueGalleryLegacyPreview(async () => {
+            const memoryKey = `legacy-preview:${GALLERY_CACHE_NAMES.thumbnails}:${url}`;
+            if (galleryImageSources.has(memoryKey)) return galleryImageSources.get(memoryKey);
+            let cache = null;
+            let cached = null;
+            if ("caches" in window) {
+                cache = await window.caches.open(GALLERY_CACHE_NAMES.thumbnails);
+                cached = await cache.match(url);
+            }
+            let preview = null;
+            if (cached?.headers.get("x-kmc-gallery-preview") === "1") {
+                const blob = await cached.blob();
+                preview = {
+                    blob,
+                    width: Number(cached.headers.get("x-kmc-preview-width")) || 0,
+                    height: Number(cached.headers.get("x-kmc-preview-height")) || 0
+                };
+            } else if (isGalleryVideo(item)) {
+                // This seeks only to the first frame, allowing the browser to
+                // request a small byte range instead of downloading the video.
+                preview = await captureGalleryVideoPreview(url);
+            } else {
+                // Legacy records were saved without a thumbnail. Download the
+                // original once, create a tiny preview, and retain only that
+                // preview in the thumbnail cache for future gallery visits.
+                let sourceBlob = cached ? await cached.blob() : null;
+                if (!sourceBlob?.size) {
+                    const response = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache" });
+                    if (!response.ok) throw new Error(`Gallery photo request failed with ${response.status}.`);
+                    sourceBlob = await response.blob();
+                }
+                preview = await compactGalleryImageBlob(sourceBlob);
+            }
+            if (!preview?.blob?.size) throw new Error("This gallery preview is empty.");
+            if (cache && cached?.headers.get("x-kmc-gallery-preview") !== "1") {
+                try {
+                    await cache.put(url, new Response(preview.blob, {
+                        headers: {
+                            "content-type": preview.blob.type || "image/webp",
+                            "cache-control": "public,max-age=31536000,immutable",
+                            "x-kmc-gallery-preview": "1",
+                            "x-kmc-preview-width": String(preview.width || 0),
+                            "x-kmc-preview-height": String(preview.height || 0)
+                        }
+                    }));
+                } catch (_) { /* The in-memory preview still works for this visit. */ }
+            }
+            if (!item.thumbnailWidth && preview.width) item.thumbnailWidth = preview.width;
+            if (!item.thumbnailHeight && preview.height) item.thumbnailHeight = preview.height;
+            const objectUrl = URL.createObjectURL(preview.blob);
+            galleryImageSources.set(memoryKey, objectUrl);
+            galleryObjectUrls.add(objectUrl);
+            return objectUrl;
+        }).catch((error) => {
+            console.warn("Unable to create a lightweight preview for this legacy gallery item:", error);
+            // Photos still render instead of remaining as placeholders. Videos
+            // never fall back to an image request for their full media file.
+            return isGalleryVideo(item) ? "" : url;
+        });
+        galleryLegacyPreviewPromises.set(url, promise);
+        return promise;
+    }
+
     function loadAndDecodeImage(image, source) {
         return new Promise((resolve, reject) => {
             image.onload = async () => {
@@ -397,7 +601,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const image = document.createElement("img");
                 image.alt = "";
                 image.decoding = "async";
-                image.loading = "lazy";
+                // The image is decoded before it replaces the placeholder, so
+                // it must not be lazy-loaded while detached from the document.
+                image.loading = "eager";
                 if (className) image.classList.add(className);
                 try {
                     const source = await cachedImageSource(candidate, GALLERY_CACHE_NAMES.thumbnails);
@@ -406,6 +612,21 @@ document.addEventListener("DOMContentLoaded", () => {
                     return source;
                 } catch (error) {
                     console.warn("Unable to display a gallery thumbnail candidate:", error);
+                }
+            }
+            const fallback = await resolveLegacyGalleryPreview(item);
+            if (fallback) {
+                const image = document.createElement("img");
+                image.alt = "";
+                image.decoding = "async";
+                image.loading = "eager";
+                if (className) image.classList.add(className);
+                try {
+                    await loadAndDecodeImage(image, fallback);
+                    if (placeholder.isConnected) placeholder.replaceWith(image);
+                    return fallback;
+                } catch (error) {
+                    console.warn("Unable to display the generated gallery preview:", error);
                 }
             }
             return "";
