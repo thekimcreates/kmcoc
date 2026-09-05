@@ -507,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
             galleryViewerMedia.appendChild(image);
             image.addEventListener("load", () => {
                 if (loadToken !== activeGalleryLoadToken) return;
+                image.style.opacity = "1";
                 image.classList.add("is-loaded");
                 previewLayer.classList.add("is-faded");
             }, { once: true });
@@ -516,6 +517,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const video = document.createElement("video");
         video.className = "performance-gallery-streaming-video";
+        video.style.opacity = "1";
         video.playsInline = true;
         video.preload = "auto";
         thumbnail.promise.then((url) => {
@@ -654,6 +656,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (from?.width && from?.height) await animateSharedMedia(proxy, from, to, true);
         } finally {
             proxy?.remove();
+            galleryViewerMedia.getAnimations?.().forEach(animation => animation.cancel());
+            galleryViewerMedia.style.opacity = "1";
+            galleryViewerMedia.style.transform = "none";
             galleryViewer.classList.add("is-visible");
             galleryViewer.classList.add("is-content-visible");
             galleryTransitioning = false;
@@ -665,23 +670,33 @@ document.addEventListener("DOMContentLoaded", () => {
         const items = galleryItemsFor(galleryRecord);
         if (galleryTransitioning || index < 0 || index >= items.length || index === activeGalleryIndex) return;
         galleryTransitioning = true;
+        galleryViewerMedia.getAnimations?.().forEach(animation => animation.cancel());
+        galleryViewerMedia.style.opacity = "1";
+        galleryViewerMedia.style.transform = "none";
         const outgoing = galleryViewerMedia.animate?.([
             { opacity: 1, transform: "scale(1)" },
             { opacity: 0, transform: "scale(.985)" }
         ], { duration: 120, easing: "ease-out", fill: "forwards" });
         try { await outgoing?.finished; } catch (_) { /* Selection changed quickly. */ }
+        outgoing?.cancel();
         renderExpandedGalleryItem(index);
         const incoming = galleryViewerMedia.animate?.([
             { opacity: 0, transform: "scale(1.015)" },
             { opacity: 1, transform: "scale(1)" }
         ], { duration: 220, easing: "cubic-bezier(.22,1,.36,1)" });
         try { await incoming?.finished; } catch (_) { /* Selection changed quickly. */ }
+        incoming?.cancel();
+        galleryViewerMedia.style.opacity = "1";
+        galleryViewerMedia.style.transform = "none";
         galleryTransitioning = false;
     }
 
     async function closeGalleryViewer() {
         if (galleryViewer.hidden || galleryTransitioning) return;
         galleryTransitioning = true;
+        galleryViewerMedia.getAnimations?.().forEach(animation => animation.cancel());
+        galleryViewerMedia.style.opacity = "1";
+        galleryViewerMedia.style.transform = "none";
         activeGalleryVideo?.pause();
         const item = galleryItemsFor(galleryRecord)[activeGalleryIndex];
         const tile = galleryGrid.querySelector(`[data-gallery-index="${activeGalleryIndex}"]`);
