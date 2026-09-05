@@ -292,7 +292,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function isVideoFile(file) {
-        return /^video\//i.test(file?.type || "") || /\.(mp4|mov|webm)$/i.test(file?.name || "");
+        return file?.type === "video" || /^video\//i.test(file?.type || file?.mimeType || "") || /\.(mp4|mov|webm)$/i.test(file?.name || file?.url || "");
+    }
+
+    function sortGalleryItems(items) {
+        return items
+            .map((item, index) => ({ item, index }))
+            .sort((a, b) => {
+                const videoOrder = Number(isVideoFile(b.item)) - Number(isVideoFile(a.item));
+                if (videoOrder) return videoOrder;
+                const nameOrder = String(a.item.name || "").localeCompare(String(b.item.name || ""), undefined, {
+                    numeric: true,
+                    sensitivity: "base"
+                });
+                return nameOrder || a.index - b.index;
+            })
+            .map(({ item }) => item);
     }
 
     function getVideoDuration(file) {
@@ -314,12 +329,154 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function canvasToBlob(canvas, type, quality) {
+        return new Promise((resolve) => {
+            try {
+                canvas.toBlob((blob) => resolve(blob || null), type, quality);
+            } catch (_) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function exportGalleryThumbnail(canvas) {
+        let blob = await canvasToBlob(canvas, "image/webp", 0.68);
+        if (blob?.size && blob.type === "image/webp") {
+            return { blob, extension: "webp", contentType: "image/webp", width: canvas.width, height: canvas.height };
+        }
+        blob = await canvasToBlob(canvas, "image/jpeg", 0.72);
+        if (!blob?.size) throw new Error("A preview image could not be created for this video.");
+        return { blob, extension: "jpg", contentType: "image/jpeg", width: canvas.width, height: canvas.height };
+    }
+
+    function createVideoThumbnail(source) {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement("video");
+            const objectUrl = source instanceof Blob ? URL.createObjectURL(source) : "";
+            let settled = false;
+            const cleanup = () => {
+                video.pause();
+                video.removeAttribute("src");
+                video.load();
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+            };
+            const finish = (error, result) => {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timeout);
+                cleanup();
+                if (error) reject(error);
+                else resolve(result);
+            };
+            const capture = async () => {
+                try {
+                    const sourceWidth = video.videoWidth;
+                    const sourceHeight = video.videoHeight;
+                    if (!sourceWidth || !sourceHeight) throw new Error("The first video frame could not be read.");
+                    const scale = Math.min(1, 480 / sourceWidth, 480 / sourceHeight);
+                    const canvas = document.createElement("canvas");
+                    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+                    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+                    const context = canvas.getContext("2d", { alpha: false });
+                    if (!context) throw new Error("Video previews are not supported by this browser.");
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const exported = await exportGalleryThumbnail(canvas);
+                    canvas.width = 1;
+                    canvas.height = 1;
+                    finish(null, exported);
+                } catch (error) {
+                    finish(error);
+                }
+            };
+            const seekOrCapture = () => {
+                const target = Number.isFinite(video.duration) && video.duration > 0.08
+                    ? Math.min(0.08, video.duration / 10)
+                    : 0;
+                if (!target) return capture();
+                video.addEventListener("seeked", capture, { once: true });
+                try {
+                    video.currentTime = target;
+                } catch (_) {
+                    capture();
+                }
+            };
+            const timeout = window.setTimeout(() => finish(new Error("The video preview took too long to prepare.")), 20000);
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "auto";
+            if (!objectUrl) video.crossOrigin = "anonymous";
+            video.addEventListener("loadeddata", seekOrCapture, { once: true });
+            video.addEventListener("error", () => finish(new Error("This video could not be opened to create its first-frame preview.")), { once: true });
+            video.src = objectUrl || String(source || "");
+            video.load();
+        });
+    }
+
+    async function createImageThumbnail(source) {
+        if (!imageOptimizer) throw new Error("The image optimizer could not be loaded. Refresh the page and try again.");
+        let blob = source;
+        if (typeof source === "string") {
+            const response = await fetch(source);
+            if (!response.ok) throw new Error("An existing gallery photo could not be downloaded to create its preview.");
+            blob = await response.blob();
+        }
+        return imageOptimizer.optimize(blob, {
+            maxWidth: 480,
+            maxHeight: 480,
+            quality: 0.66,
+            jpegQuality: 0.7,
+            maxInputBytes: 500 * 1024 * 1024
+        });
+    }
+
+    async function uploadGalleryThumbnail(documentId, thumbnail, token) {
+        const path = `performance-highlights/${documentId}/gallery-thumb-${Date.now()}-${token}.${thumbnail.extension}`;
+        const snapshot = await storage.ref(path).put(thumbnail.blob, {
+            contentType: thumbnail.contentType,
+            cacheControl: "public,max-age=31536000,immutable"
+        });
+        return { thumbnailUrl: await snapshot.ref.getDownloadURL(), thumbnailPath: path };
+    }
+
+    async function ensureGalleryThumbnails(documentId, items) {
+        const nextItems = new Array(items.length);
+        let nextIndex = 0;
+        let completed = 0;
+
+        async function prepareNext() {
+            const index = nextIndex++;
+            if (index >= items.length) return;
+            const item = items[index];
+            if (item.thumbnailUrl) {
+                nextItems[index] = item;
+            } else {
+                try {
+                    setStatus(`Preparing gallery previews… ${completed} of ${items.length} complete`);
+                    const thumbnail = isVideoFile(item)
+                        ? await createVideoThumbnail(item.url)
+                        : await createImageThumbnail(item.url);
+                    const uploaded = await uploadGalleryThumbnail(documentId, thumbnail, `existing-${index}`);
+                    nextItems[index] = { ...item, ...uploaded };
+                } catch (error) {
+                    console.warn(`Unable to create a preview for ${item.name || "gallery item"}:`, error);
+                    nextItems[index] = item;
+                }
+            }
+            completed += 1;
+            await prepareNext();
+        }
+
+        const workerCount = Math.min(3, items.length);
+        await Promise.all(Array.from({ length: workerCount }, () => prepareNext()));
+        return nextItems;
+    }
+
     function renderGalleryFiles() {
-        const items = [
+        const items = sortGalleryItems([
             ...galleryItems.map((item, index) => ({ ...item, source: "saved", index })),
             ...pendingGalleryFiles.map((item, index) => ({ ...item, source: "pending", index }))
-        ];
-        const photos = items.filter(item => item.type !== "video").length;
+        ]);
+        const photos = items.filter(item => !isVideoFile(item)).length;
         const videos = items.length - photos;
         gallerySummary.textContent = items.length
             ? `${items.length} item${items.length === 1 ? "" : "s"} · ${photos} photo${photos === 1 ? "" : "s"} · ${videos} video${videos === 1 ? "" : "s"}`
@@ -329,7 +486,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const row = document.createElement("li");
             row.className = "performance-gallery-admin-item";
             const name = document.createElement("span");
-            name.textContent = `${item.type === "video" ? "Video" : "Photo"} · ${item.name || "Untitled file"}`;
+            name.textContent = `${isVideoFile(item) ? "Video" : "Photo"} · ${item.name || "Untitled file"}`;
             const remove = document.createElement("button");
             remove.type = "button";
             remove.className = "admin-danger-button admin-small-button";
@@ -338,6 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (item.source === "saved") {
                     const removed = galleryItems.splice(item.index, 1)[0];
                     if (removed?.path) galleryPathsToDelete.push(removed.path);
+                    if (removed?.thumbnailPath) galleryPathsToDelete.push(removed.thumbnailPath);
                 } else {
                     pendingGalleryFiles.splice(item.index, 1);
                 }
@@ -587,7 +745,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 await tools.logActivity(db, auth, "Restored", "performance", record.id, label);
             }, { onExpire: () => Promise.all([
                 tools.deleteStoragePath(storage, record.highlightPhotoPath),
-                ...(Array.isArray(record.galleryItems) ? record.galleryItems.map(item => item.path).filter(Boolean).map(path => tools.deleteStoragePath(storage, path)) : [])
+                ...(Array.isArray(record.galleryItems)
+                    ? record.galleryItems.flatMap(item => [item.path, item.thumbnailPath]).filter(Boolean).map(path => tools.deleteStoragePath(storage, path))
+                    : [])
             ]) });
         } catch (error) {
             console.error("Unable to delete performance:", error);
@@ -648,7 +808,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!video) {
                 if (!imageOptimizer) throw new Error("The image optimizer could not be loaded. Refresh the page and try again.");
                 setStatus(`Preparing gallery files… ${completed} of ${queue.length} complete`);
-                const optimized = await imageOptimizer.optimize(file, { maxWidth: 2000, maxHeight: 2000, quality: 0.84 });
+                const optimized = await imageOptimizer.optimize(file, {
+                    maxWidth: 2000,
+                    maxHeight: 2000,
+                    quality: 0.84,
+                    maxInputBytes: 500 * 1024 * 1024
+                });
                 blob = optimized.blob;
                 fileName = optimized.fileName;
                 mimeType = optimized.contentType;
@@ -660,11 +825,18 @@ document.addEventListener("DOMContentLoaded", () => {
             // write there, while a new top-level performance-gallery prefix is
             // denied by that policy.
             const path = `performance-highlights/${documentId}/gallery-${Date.now()}-${index}-${fileName}`;
-            const snapshot = await storage.ref(path).put(blob, { contentType: mimeType, cacheControl: "public,max-age=31536000,immutable" });
+            const assetUpload = storage.ref(path).put(blob, {
+                contentType: mimeType,
+                cacheControl: "public,max-age=31536000,immutable"
+            });
+            const thumbnailUpload = (video ? createVideoThumbnail(file) : createImageThumbnail(blob))
+                .then(thumbnail => uploadGalleryThumbnail(documentId, thumbnail, `new-${index}`));
+            const [snapshot, thumbnail] = await Promise.all([assetUpload, thumbnailUpload]);
             uploaded[index] = {
                 id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 url: await snapshot.ref.getDownloadURL(),
                 path,
+                ...thumbnail,
                 name: file.name,
                 type: video ? "video" : "image",
                 mimeType,
@@ -675,7 +847,7 @@ document.addEventListener("DOMContentLoaded", () => {
             await uploadNext();
         }
 
-        const workerCount = Math.min(3, queue.length);
+        const workerCount = Math.min(4, queue.length);
         await Promise.all(Array.from({ length: workerCount }, () => uploadNext()));
         return uploaded;
     }
@@ -752,7 +924,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const uploadedGallery = await uploadGalleryFiles(reference.id);
             const savedGallery = Array.isArray(galleryItems) ? galleryItems : [];
-            const nextGalleryItems = [...savedGallery, ...uploadedGallery];
+            const nextGalleryItems = sortGalleryItems(await ensureGalleryThumbnails(reference.id, [...savedGallery, ...uploadedGallery]));
 
             const data = {
                 date: dateInput.value,

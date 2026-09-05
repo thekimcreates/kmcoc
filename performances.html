@@ -24,7 +24,7 @@
     >
 
     <link rel="stylesheet" href="css/style.css?v=20260830about1">
-    <link rel="stylesheet" href="css/performances.css?v=20260830about1">
+    <link rel="stylesheet" href="css/performances.css?v=20260904gallery4">
 </head>
 
 <body class="performances-page">
@@ -244,17 +244,17 @@
             <button id="performance-gallery-modal-close" class="performance-gallery-modal-close" type="button" aria-label="Close gallery"><span></span><span></span></button>
         </header>
         <div id="performance-gallery-grid" class="performance-gallery-grid"></div>
-        <div id="performance-gallery-viewer" class="performance-gallery-viewer" hidden>
-            <button id="performance-gallery-viewer-close" class="performance-gallery-viewer-close" type="button" aria-label="Back to gallery">‹</button>
-            <div id="performance-gallery-viewer-media" class="performance-gallery-viewer-media"></div>
-            <div id="performance-gallery-video-controls" class="performance-gallery-video-controls" hidden>
-                <button id="performance-gallery-video-toggle" type="button" aria-label="Play video"><span class="gallery-play-icon" aria-hidden="true"></span></button>
-                <span id="performance-gallery-video-elapsed">0:00</span>
-                <input id="performance-gallery-video-progress" type="range" min="0" max="100" value="0" aria-label="Video progress">
-                <span id="performance-gallery-video-duration">0:00</span>
-            </div>
-        </div>
     </section>
+    <div id="performance-gallery-viewer" class="performance-gallery-viewer" role="dialog" aria-modal="true" aria-label="Expanded gallery media" hidden>
+        <button id="performance-gallery-viewer-close" class="performance-gallery-viewer-close" type="button" aria-label="Back to gallery">‹</button>
+        <div id="performance-gallery-viewer-media" class="performance-gallery-viewer-media"></div>
+        <div id="performance-gallery-video-controls" class="performance-gallery-video-controls" hidden>
+            <button id="performance-gallery-video-toggle" type="button" aria-label="Play video"><span class="gallery-play-icon" aria-hidden="true"></span></button>
+            <span id="performance-gallery-video-elapsed">0:00</span>
+            <input id="performance-gallery-video-progress" type="range" min="0" max="100" value="0" aria-label="Video progress">
+            <span id="performance-gallery-video-duration">0:00</span>
+        </div>
+    </div>
 </div>
 
 <footer class="footer">
@@ -283,7 +283,7 @@
 
 
 
-<script defer src="js/performances.js?v=20260830about1"></script>
+<script defer src="js/performances.js?v=20260904gallery4"></script>
 
 </body>
 </html>

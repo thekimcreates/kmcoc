@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let closeTimer = null;
     let galleryRecord = null;
     let activeGalleryVideo = null;
+    let activeGalleryLoadToken = 0;
     const selectedArrangements = new Set();
     const CACHE_KEYS = {
         performances: "kmc-public-performances-v2",
@@ -264,9 +265,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function galleryItemsFor(record) {
-        return Array.isArray(record?.galleryItems)
-            ? record.galleryItems.filter((item) => item?.url)
-            : [];
+        if (!Array.isArray(record?.galleryItems)) return [];
+        return record.galleryItems
+            .filter((item) => item?.url)
+            .map((item, index) => ({ item, index }))
+            .sort((a, b) => {
+                const videoOrder = Number(isGalleryVideo(b.item)) - Number(isGalleryVideo(a.item));
+                if (videoOrder) return videoOrder;
+                const nameOrder = String(a.item.name || "").localeCompare(String(b.item.name || ""), undefined, {
+                    numeric: true,
+                    sensitivity: "base"
+                });
+                return nameOrder || a.index - b.index;
+            })
+            .map(({ item }) => item);
     }
 
     function isGalleryVideo(item) {
@@ -278,29 +290,50 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
     }
 
+    function formatGalleryDate(value) {
+        if (!value) return "Date TBD";
+        const date = new Date(`${value}T12:00:00`);
+        if (Number.isNaN(date.getTime())) return value;
+        return new Intl.DateTimeFormat("en-US", {
+            month: "numeric",
+            day: "numeric",
+            year: "numeric"
+        }).format(date);
+    }
+
+    function galleryThumbnailFor(item) {
+        return item?.thumbnailUrl || item?.previewUrl || "";
+    }
+
+    function createGalleryPlaceholder(item) {
+        const placeholder = document.createElement("span");
+        placeholder.className = "performance-gallery-placeholder";
+        placeholder.textContent = isGalleryVideo(item) ? "Video" : "Photo";
+        placeholder.setAttribute("aria-hidden", "true");
+        return placeholder;
+    }
+
     function createGalleryTile(item, className) {
         const tile = document.createElement("button");
         tile.type = "button";
         tile.className = className;
         tile.setAttribute("aria-label", `Open ${item.name || (isGalleryVideo(item) ? "video" : "photo")}`);
+        const thumbnailUrl = galleryThumbnailFor(item);
+        if (thumbnailUrl) {
+            const image = document.createElement("img");
+            image.src = thumbnailUrl;
+            image.alt = "";
+            image.loading = "lazy";
+            image.decoding = "async";
+            tile.appendChild(image);
+        } else {
+            tile.appendChild(createGalleryPlaceholder(item));
+        }
         if (isGalleryVideo(item)) {
-            const video = document.createElement("video");
-            video.src = item.url;
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = "metadata";
-            tile.appendChild(video);
             const badge = document.createElement("span");
             badge.className = "performance-gallery-video-badge";
             badge.textContent = item.duration ? formatDuration(item.duration) : "Video";
             tile.appendChild(badge);
-        } else {
-            const image = document.createElement("img");
-            image.src = item.url;
-            image.alt = item.name || "Performance gallery photo";
-            image.loading = "lazy";
-            image.decoding = "async";
-            tile.appendChild(image);
         }
         return tile;
     }
@@ -319,8 +352,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function closeGalleryViewer() {
+        activeGalleryLoadToken += 1;
         activeGalleryVideo?.pause();
+        if (activeGalleryVideo) activeGalleryVideo.removeAttribute("src");
         activeGalleryVideo = null;
+        galleryViewer.classList.remove("is-visible");
+        galleryModal?.classList.remove("is-viewing");
+        document.body.classList.remove("performance-gallery-viewer-open");
         galleryViewer.hidden = true;
         galleryViewerMedia.replaceChildren();
         galleryVideoControls.hidden = true;
@@ -331,19 +369,41 @@ document.addEventListener("DOMContentLoaded", () => {
         const item = galleryItemsFor(galleryRecord)[index];
         if (!item) return;
         closeGalleryViewer();
+        const loadToken = activeGalleryLoadToken;
         galleryViewer.hidden = false;
+        galleryModal.classList.add("is-viewing");
+        document.body.classList.add("performance-gallery-viewer-open");
+        requestAnimationFrame(() => galleryViewer.classList.add("is-visible"));
+
+        const thumbnailUrl = galleryThumbnailFor(item);
+        const preview = thumbnailUrl ? document.createElement("img") : createGalleryPlaceholder(item);
+        preview.classList.add("performance-gallery-progressive-preview");
+        if (thumbnailUrl) {
+            preview.src = thumbnailUrl;
+            preview.alt = "";
+            preview.decoding = "async";
+        }
+        galleryViewerMedia.appendChild(preview);
+
         if (!isGalleryVideo(item)) {
             const image = document.createElement("img");
-            image.src = item.url;
+            image.className = "performance-gallery-progressive-full";
             image.alt = item.name || "Performance gallery photo";
             galleryViewerMedia.appendChild(image);
+            image.addEventListener("load", () => {
+                if (loadToken !== activeGalleryLoadToken) return;
+                image.classList.add("is-loaded");
+                preview.classList.add("is-faded");
+            }, { once: true });
+            image.src = item.url;
             return;
         }
 
         const video = document.createElement("video");
-        video.src = item.url;
+        video.className = "performance-gallery-streaming-video";
         video.playsInline = true;
-        video.preload = "metadata";
+        video.preload = "auto";
+        if (thumbnailUrl) video.poster = thumbnailUrl;
         galleryViewerMedia.appendChild(video);
         activeGalleryVideo = video;
         galleryVideoControls.hidden = false;
@@ -362,11 +422,15 @@ document.addEventListener("DOMContentLoaded", () => {
         video.addEventListener("play", syncVideoControls);
         video.addEventListener("pause", syncVideoControls);
         video.addEventListener("ended", syncVideoControls);
+        video.addEventListener("playing", () => {
+            if (loadToken === activeGalleryLoadToken) preview.classList.add("is-faded");
+        });
         galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
         galleryVideoProgress.oninput = () => {
             if (Number.isFinite(video.duration)) video.currentTime = (Number(galleryVideoProgress.value) / 100) * video.duration;
         };
         syncVideoControls();
+        video.src = item.url;
         video.play().catch(syncVideoControls);
     }
 
@@ -376,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const items = galleryItemsFor(record);
         if (!items.length) return;
         closeGalleryViewer();
-        galleryModalTitle.textContent = `${formatDate(record.date)} Gallery`;
+        galleryModalTitle.textContent = `${getLocation(record)} ${formatGalleryDate(record.date)} - Gallery`;
         galleryGrid.replaceChildren(...items.map((item, index) => {
             const tile = createGalleryTile(item, "performance-gallery-tile");
             tile.addEventListener("click", () => openGalleryViewer(index));
