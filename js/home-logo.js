@@ -94,6 +94,7 @@ function createLogoMotion(ctx, logo, makeCanvas) {
     if (preference.matches) return;
 
     const DURATION = 5.45;
+    const PLAYBACK_SPEED = DURATION / 2; // Same timeline, played in 2 seconds.
     let render = null;
     let frameId = 0;
     let elapsed = 0;
@@ -125,7 +126,7 @@ function createLogoMotion(ctx, logo, makeCanvas) {
     function tick(now) {
         frameId = 0;
         if (finished || document.hidden || !inView) { previousTime = null; return; }
-        if (previousTime !== null) elapsed += Math.max(0, now - previousTime) / 1000;
+        if (previousTime !== null) elapsed += (Math.max(0, now - previousTime) / 1000) * PLAYBACK_SPEED;
         previousTime = now;
         if (elapsed >= DURATION) { finish(); return; }
         render(elapsed);
