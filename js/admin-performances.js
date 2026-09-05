@@ -463,9 +463,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!imageOptimizer) throw new Error("The image optimizer could not be loaded. Refresh the page and try again.");
         let blob = source;
         if (typeof source === "string") {
-            const response = await fetch(source);
-            if (!response.ok) throw new Error("An existing gallery photo could not be downloaded to create its preview.");
-            blob = await response.blob();
+            const controller = new AbortController();
+            const timer = window.setTimeout(() => controller.abort(), 30000);
+            try {
+                const response = await fetch(source, { signal: controller.signal });
+                if (!response.ok) throw new Error(`Photo download failed (${response.status}).`);
+                blob = await response.blob();
+                // Older Storage objects can have a generic Content-Type. Use
+                // the file signature rather than rejecting valid image bytes.
+                if (!/^image\//i.test(blob.type)) {
+                    const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+                    const mime = bytes[0] === 255 && bytes[1] === 216 ? "image/jpeg"
+                        : bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 ? "image/png"
+                        : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP" ? "image/webp" : "";
+                    if (mime) blob = new Blob([blob], { type: mime });
+                }
+            } finally { window.clearTimeout(timer); }
         }
         return imageOptimizer.optimize(blob, {
             maxWidth: 480,
@@ -575,50 +588,103 @@ document.addEventListener("DOMContentLoaded", () => {
         return nextItems;
     }
 
-    async function repairMissingGalleryThumbnails(records) {
+    function previewRepairTimeout(task, milliseconds = 45000) {
+        let timer;
+        return Promise.race([
+            Promise.resolve().then(task),
+            new Promise((_, reject) => {
+                timer = window.setTimeout(() => reject(new Error("Preview preparation timed out. Retry this file.")), milliseconds);
+            })
+        ]).finally(() => window.clearTimeout(timer));
+    }
+
+    function usableInlinePreview(value) {
+        if (!/^data:image\/(webp|jpeg|png);base64,/i.test(value || "")) return Promise.resolve(false);
+        return new Promise(resolve => {
+            const image = new Image();
+            const finish = valid => {
+                window.clearTimeout(timer);
+                image.onload = image.onerror = null;
+                image.removeAttribute("src");
+                resolve(valid);
+            };
+            const timer = window.setTimeout(() => finish(false), 5000);
+            image.onload = () => finish(image.naturalWidth > 0 && image.naturalHeight > 0);
+            image.onerror = () => finish(false);
+            image.src = value;
+        });
+    }
+
+    async function repairMissingGalleryThumbnails(records, retry = false) {
         if (thumbnailRepairRunning) return;
         thumbnailRepairRunning = true;
+        const button = get("performance-preview-retry");
+        const report = get("performance-preview-report");
+        const details = get("performance-preview-errors");
+        button.disabled = true;
+        details.replaceChildren();
+        let processed = 0, repaired = 0, failed = 0;
+        const jobs = records.filter(record => record.id && (retry || !thumbnailRepairAttempted.has(record.id)))
+            .flatMap(record => (record.galleryItems || []).map(item => ({ record, item })));
+        const update = () => {
+            report.textContent = `Checking previews: ${processed} of ${jobs.length} · ${repaired} repaired · ${failed} failed`;
+        };
+        update();
         try {
-            for (const record of records) {
-                const items = Array.isArray(record.galleryItems) ? record.galleryItems : [];
-                const needsRepair = items.some(item => item?.url && !item.thumbnailDataUrl);
-                if (!record.id || !needsRepair || thumbnailRepairAttempted.has(record.id)) continue;
-                thumbnailRepairAttempted.add(record.id);
-                const repaired = await ensureGalleryThumbnails(record.id, items, false);
-                const repairedCount = repaired.filter(item => item.thumbnailDataUrl).length;
-                const originalCount = items.filter(item => item.thumbnailDataUrl).length;
-                if (repairedCount > originalCount) {
+            // Photos first so slow video decoders cannot block photo repairs.
+            jobs.sort((a, b) => Number(isVideoFile(a.item)) - Number(isVideoFile(b.item)));
+            for (const { record, item } of jobs) {
+                try {
+                    if (await usableInlinePreview(item.thumbnailDataUrl)) continue;
+                    const thumbnail = await previewRepairTimeout(() => createExistingGalleryThumbnail(item), isVideoFile(item) ? 180000 : 90000);
+                    // Save the compact image directly. An optional Storage upload
+                    // must not block repairing the preview that the public reads.
+                    const thumbnailDataUrl = await previewRepairTimeout(() => createInlineGalleryThumbnail(thumbnail));
+                    if (!await usableInlinePreview(thumbnailDataUrl)) throw new Error("The generated preview could not be decoded.");
+                    const fields = { thumbnailDataUrl, thumbnailWidth: thumbnail.width || 0, thumbnailHeight: thumbnail.height || 0 };
                     const reference = db.collection("performances").doc(record.id);
-                    await db.runTransaction(async transaction => {
+                    const didSave = await previewRepairTimeout(() => db.runTransaction(async transaction => {
                         const snapshot = await transaction.get(reference);
-                        if (!snapshot.exists) return;
-                        const current = snapshot.data().galleryItems || [];
+                        if (!snapshot.exists) return false;
                         let changed = false;
-                        const merged = current.map(item => {
-                            if (item.thumbnailDataUrl) return item;
-                            const preview = repaired.find(candidate => candidate.url === item.url && candidate.path === item.path && candidate.thumbnailDataUrl);
-                            if (!preview) return item;
+                        const merged = (snapshot.data().galleryItems || []).map(current => {
+                            if (current.url !== item.url || current.path !== item.path || current.id !== item.id) return current;
+                            // Keep a preview another save supplied during our work.
+                            if (current.thumbnailDataUrl && current.thumbnailDataUrl !== item.thumbnailDataUrl) return current;
                             changed = true;
-                            // Merge only preview fields, preserving concurrent edits/deletions.
-                            const fields = {};
-                            for (const key of ["thumbnailDataUrl", "thumbnailUrl", "thumbnailPath", "thumbnailWidth", "thumbnailHeight"]) {
-                                if (preview[key] !== undefined) fields[key] = preview[key];
-                            }
-                            return { ...item, ...fields };
+                            return { ...current, ...fields };
                         });
                         if (changed) transaction.update(reference, {
-                            galleryItems: merged,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            galleryItems: merged, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
-                    });
+                        return changed;
+                    }));
+                    if (didSave) {
+                        repaired += 1;
+                        // Prevent a later Save Changes in an already-open editor
+                        // from overwriting this freshly repaired preview.
+                        if (idInput.value === record.id) galleryItems = galleryItems.map(current =>
+                            current.url === item.url && current.path === item.path && current.id === item.id ? { ...current, ...fields } : current);
+                    }
+                } catch (error) {
+                    failed += 1;
+                    const line = document.createElement("li");
+                    line.textContent = `${record.locationName || record.location || "Performance"} — ${item.name || "Gallery file"}: ${error.code || error.message || "Preview repair failed."}`;
+                    details.appendChild(line);
+                } finally {
+                    processed += 1;
+                    update();
                 }
             }
-        } catch (error) {
-            console.warn("Unable to finish repairing gallery previews:", error);
+            records.forEach(record => thumbnailRepairAttempted.add(record.id));
+            report.textContent = `Preview check finished: ${processed} checked · ${repaired} repaired · ${failed} failed.`;
         } finally {
             thumbnailRepairRunning = false;
+            button.disabled = false;
         }
     }
+
+    get("performance-preview-retry").addEventListener("click", () => repairMissingGalleryThumbnails(performanceRecords, true));
 
     function renderGalleryFiles() {
         galleryDownloadButton.hidden = !idInput.value;
