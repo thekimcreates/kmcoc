@@ -21,8 +21,11 @@
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 30000);
         try {
+            const headers = { "Content-Type": "application/json" };
+            const user = window.kmcFirebase?.auth?.currentUser;
+            if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
             const response = await fetch(`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents:runQuery?key=${encodeURIComponent(config.apiKey)}`, {
-                method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+                method: "POST", headers, signal: controller.signal,
                 body: JSON.stringify({ structuredQuery: {
                     from: [{ collectionId: "performances" }],
                     select: { fields: fields.map(fieldPath => ({ fieldPath })) },
@@ -40,12 +43,14 @@
             // Preserve compatibility with deployments that require SDK-specific
             // credentials or do not permit this REST request.
             console.warn("Using the standard performance loader:", error);
-            return window.KMCDataStore.getPerformances();
+            if (window.KMCDataStore) return window.KMCDataStore.getPerformances();
+            const snapshot = await window.kmcFirebase.db.collection("performances").orderBy("date", "desc").get({ source: "server" });
+            return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         } finally { clearTimeout(timer); }
     }
-    function detail(record) {
+    function detail(record, { fresh = false } = {}) {
         const key = `${record.id}:${record._version || ""}`;
-        if (details.has(key)) return Promise.resolve(details.get(key));
+        if (!fresh && details.has(key)) return Promise.resolve(details.get(key));
         if (pending.has(key)) return pending.get(key);
         const task = window.kmcFirebase.db.collection("performances").doc(record.id).get({ source: "server" }).then(snapshot => {
             if (!snapshot.exists) throw new Error("This performance is no longer available.");

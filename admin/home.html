@@ -6,6 +6,7 @@
     <title>Manage Home Page | KMC Samulnori</title>
     <link rel="stylesheet" href="../css/admin.css?v=20260830about1">
     <link rel="stylesheet" href="../css/admin-mobile-polish.css?v=20260725p3a">
+<link rel="stylesheet" href="../css/site-polish.css?v=20260905polish1">
 </head>
 <body data-admin-page="home-sections">
 <div class="admin-shell">
@@ -28,7 +29,7 @@
         <div class="admin-dashboard-header performance-page-header">
             <div>
                 <h1>Home Page</h1>
-                <p class="admin-page-copy">Reorder the homepage sections or add custom headings and text.</p>
+                
             </div>
             <div class="admin-user-meta">
                 <span id="admin-user-email"></span>
@@ -41,7 +42,7 @@
             <div class="admin-panel-heading">
                 <div>
                     <h2>Hero Images</h2>
-                    <p class="admin-help-text">Upload as many images as needed. Drag them to choose the carousel order.</p>
+                    
                 </div>
                 <label class="admin-submit home-hero-upload-label" for="home-hero-upload">Add Hero Images</label>
                 <input id="home-hero-upload" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" multiple>
@@ -56,12 +57,12 @@
         <section class="admin-panel">
             <div class="admin-panel-heading">
                 <div>
-                    <h2>Published Sections</h2>
+                    <h2>Sections</h2>
                 </div>
                 <button id="add-text-section" class="admin-submit" type="button">Add Header and Text</button>
             </div>
 
-            <p class="admin-help-text home-sections-help">Drag using the handle on the left. The hero remains fixed at the top of the homepage.</p>
+            
             <div id="home-section-list" class="home-section-admin-list" aria-live="polite"></div>
             <p id="home-section-status" class="login-status" role="status" aria-live="polite"></p>
         </section>
@@ -110,12 +111,12 @@
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-storage-compat.js"></script>
-<script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260725p3a"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
+<script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/admin-session.js?v=20260905polish1"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260905polish1"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
 
 
 <script src="../js/image-optimizer.js?v=20260725p3a"></script>
 <script src="../js/admin-home.js?v=20260725p3a"></script>
 <script src="../js/admin-home-hero.js?v=20260725p3a"></script>
 
-</body>
+<script src="../js/admin-header.js?v=20260905polish1"></script></body>
 </html>

@@ -190,6 +190,7 @@
   }
 
   async function verifyAdmin(auth, db, user, { force = false, ttl = 5 * 60 * 1000 } = {}) {
+    if (window.KMCAdminSession && !await window.KMCAdminSession.check(user)) return false;
     if (!auth || !db || !user?.uid) return false;
     if (!force && readCachedAdminAccess(user, ttl) === true) return true;
 

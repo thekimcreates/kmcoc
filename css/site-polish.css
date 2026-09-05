@@ -1,0 +1,82 @@
+/* Shared page surfaces and matching public/admin navigation metrics. */
+:root { --page-solid: #fff; --background: #fff; --admin-bg: #fff; }
+html, body { background: var(--page-solid) !important; }
+.admin-site-header, body[data-admin-page="login"] .navbar {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Segoe UI", sans-serif;
+}
+.admin-site-header {
+    top: 20px; width: min(1150px, calc(100% - 40px)); height: 80px;
+    min-height: 80px; margin: 20px auto 0; padding: 0 30px;
+    align-items: center; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.5);
+    box-shadow: 0 15px 50px rgba(0,0,0,.15);
+}
+.admin-nav { align-items: center; gap: 38px; }
+.admin-nav a, body[data-admin-page="login"] .nav-links a {
+    display: inline-flex; align-items: center; padding: 10px 0;
+    font-size: .95rem; font-weight: 500; line-height: 1;
+}
+.admin-header-toggle { display: none; }
+.home-hero-admin-card, .home-hero-drag-preview { background: #fff; color: #171717; }
+@media (prefers-color-scheme: dark) {
+    :root { --page-solid: #000; --background: #000; --admin-bg: #000; }
+    .admin-site-header { background: rgba(28,28,30,.72); border-color: rgba(255,255,255,.12); }
+    .home-hero-admin-card, .home-hero-drag-preview { background: #1c1c1e; color: #f5f5f7; border-color: rgba(255,255,255,.16); }
+    .home-hero-admin-copy p { color: #aaaab2; }
+    .home-hero-admin-card > img { background: #303034; }
+    .home-hero-upload-progress { background: rgba(255,130,150,.1); color: #ffb3c0; }
+}
+@media (max-width: 1000px) {
+    .admin-site-header { position: sticky; padding: 0 20px; }
+    .admin-header-toggle { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 1.5rem; }
+    .admin-site-header .admin-nav { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 12px); padding: 22px; border-radius: 24px; background: #fff; box-shadow: 0 15px 50px rgba(0,0,0,.15); }
+    .admin-site-header.is-menu-open .admin-nav { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .admin-nav a { font-size: 1rem; }
+}
+@media (max-width: 1000px) and (prefers-color-scheme: dark) {
+    .admin-site-header .admin-nav { background: #1c1c1e; }
+}
+
+.home-hero-scroll {
+    position: absolute;
+    z-index: 3;
+    bottom: 34px;
+    left: 50%;
+    display: grid;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.38), 0 10px 28px rgba(0, 0, 0, 0.24);
+    transform: translateX(-50%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    animation: home-scroll-glow 2.4s ease-in-out infinite;
+}
+
+.home-hero-scroll span {
+    width: 12px;
+    height: 12px;
+    margin-top: -5px;
+    border-right: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+    transform: rotate(45deg);
+    animation: home-scroll-arrow 2.4s ease-in-out infinite;
+}
+
+.home-hero-scroll:focus-visible { outline: 3px solid #ffffff; outline-offset: 4px; }
+
+@keyframes home-scroll-glow { 50% { box-shadow: 0 0 0 11px rgba(255, 255, 255, 0), 0 12px 34px rgba(0, 0, 0, 0.3); } }
+@keyframes home-scroll-arrow { 50% { transform: translateY(5px) rotate(45deg); } }
+
+
+@media (prefers-reduced-motion: reduce) { .home-hero-scroll,.home-hero-scroll span { animation:none; } }
+
+.admin-header-toggle { position: relative; }
+.admin-header-toggle span { position: absolute; left: 12px; width: 20px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .2s; }
+.admin-header-toggle span:first-child { transform: translateY(-4px); }
+.admin-header-toggle span:last-child { transform: translateY(4px); }
+.is-menu-open .admin-header-toggle span:first-child { transform: rotate(45deg); }
+.is-menu-open .admin-header-toggle span:last-child { transform: rotate(-45deg); }

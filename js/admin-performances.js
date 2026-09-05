@@ -684,7 +684,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    get("performance-preview-retry").addEventListener("click", () => repairMissingGalleryThumbnails(performanceRecords, true));
+    get("performance-preview-retry").addEventListener("click", async () => {
+        const button = get("performance-preview-retry");
+        button.disabled = true;
+        try {
+            const full = [];
+            for (const record of performanceRecords) {
+                get("performance-preview-report").textContent = `Loading galleries for repair: ${full.length} of ${performanceRecords.length}`;
+                full.push(await window.KMCPerformanceList.detail(record, { fresh: true }));
+            }
+            await repairMissingGalleryThumbnails(full, true);
+        } catch (error) { get("performance-preview-report").textContent = error.message || "Unable to load galleries for repair."; }
+        finally { button.disabled = false; }
+    });
 
     function renderGalleryFiles() {
         galleryDownloadButton.hidden = !idInput.value;
@@ -881,7 +893,7 @@ document.addEventListener("DOMContentLoaded", () => {
         editButton.type = "button";
         editButton.className = "admin-secondary-button admin-small-button";
         editButton.textContent = "Edit";
-        editButton.addEventListener("click", () => beginEdit(record));
+        editButton.addEventListener("click", () => beginEdit(record, editButton));
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "admin-danger-button admin-small-button";
@@ -899,7 +911,11 @@ document.addEventListener("DOMContentLoaded", () => {
         performanceRecords.forEach((record) => list.appendChild(createPerformanceCard(record)));
     }
 
-    function beginEdit(record) {
+    async function beginEdit(record, trigger) {
+        if (trigger) { trigger.disabled = true; trigger.textContent = "Loading…"; }
+        try { record = await window.KMCPerformanceList.detail(record, { fresh: true }); }
+        catch (error) { get("performance-preview-report").textContent = error.message || "Unable to load performance."; return; }
+        finally { if (trigger) { trigger.disabled = false; trigger.textContent = "Edit"; } }
         resetForm();
         idInput.value = record.id;
         dateInput.value = record.date;
@@ -950,15 +966,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function deletePerformance(record) {
+        try { record = await window.KMCPerformanceList.detail(record, { fresh: true }); }
+        catch (error) { get("performance-preview-report").textContent = error.message || "Unable to load performance."; return; }
         const label = `${formatDate(record.date)} performance`;
         if (!await tools.confirmAction({ title:"Delete performance?", message:`Delete the ${label}? You can undo this for a few seconds.`, confirmText:"Delete" })) return;
         try {
             await db.collection("performances").doc(record.id).delete();
+            refreshPerformanceList();
             if (idInput.value === record.id) resetForm();
             await tools.logActivity(db, auth, "Deleted", "performance", record.id, label);
             tools.showUndo(`${label} deleted.`, async () => {
                 const restored = { ...record }; delete restored.id;
                 await db.collection("performances").doc(record.id).set(restored);
+                refreshPerformanceList();
                 await tools.logActivity(db, auth, "Restored", "performance", record.id, label);
             }, { onExpire: () => Promise.all([
                 tools.deleteStoragePath(storage, record.highlightPhotoPath),
@@ -972,16 +992,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    function subscribeToPerformances() {
-        unsubscribePerformances = db.collection("performances").orderBy("date", "desc").onSnapshot((snapshot) => {
-            performanceRecords = snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
+    let listRequest = null;
+    function refreshPerformanceList() {
+        if (listRequest) return listRequest;
+        listRequest = window.KMCPerformanceList.list().then(records => {
+            performanceRecords = records;
+            empty.textContent = "No performances have been added yet.";
             renderPerformances();
-            repairMissingGalleryThumbnails(performanceRecords);
-        }, (error) => {
+        }).catch(error => {
             console.error("Unable to load performances:", error);
             empty.hidden = false;
-            empty.textContent = "Performances could not be loaded.";
-        });
+            empty.textContent = "Performances could not be loaded. Refresh to try again.";
+        }).finally(() => { listRequest = null; });
+        return listRequest;
+    }
+    function subscribeToPerformances() {
+        refreshPerformanceList();
+        const refresh = () => { if (!document.hidden && auth.currentUser) refreshPerformanceList(); };
+        const timer = window.setInterval(refresh, 60000);
+        window.addEventListener("focus", refresh);
+        unsubscribePerformances = () => {
+            window.clearInterval(timer);
+            window.removeEventListener("focus", refresh);
+        };
     }
 
     async function uploadHighlight(documentId) {
@@ -1078,11 +1111,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 return returnToLogin();
             }
             email.textContent = user.email || "Administrator";
-            await Promise.all([loadMembers(), loadArrangements()]);
             loading.hidden = true;
             page.hidden = false;
-            subscribeToPerformances();
             resetForm();
+            subscribeToPerformances();
+            await Promise.all([loadMembers(), loadArrangements()]);
         } catch (error) {
             console.error("Unable to verify administrator:", error);
             loading.textContent = "Unable to verify administrator access. Check your connection and refresh.";
@@ -1186,6 +1219,7 @@ document.addEventListener("DOMContentLoaded", () => {
             await tools.logActivity(db, auth, documentId ? "Updated" : "Created", "performance", reference.id, `${formatDate(data.date)} performance`);
 
             resetForm();
+            refreshPerformanceList();
             const savedMessage = documentId ? "Performance updated successfully." : "Performance added successfully.";
             setStatus(imageOptimization ? `${savedMessage} ${imageOptimizer.summary(imageOptimization)}` : savedMessage, "success");
             closePerformanceModal();

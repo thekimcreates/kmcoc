@@ -1440,6 +1440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.addEventListener("keydown", (event) => {
+        if (event.defaultPrevented) return;
         if (!galleryViewer?.hidden && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
             event.preventDefault();
             const direction = event.key === "ArrowLeft" ? -1 : 1;
@@ -1455,6 +1456,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === "Escape" && !arrangementPopover.hidden) {
             closeArrangementPopover();
             arrangementTrigger.focus();
+            return;
+        }
+        if (event.key === "Escape" && !detail.hidden) {
+            event.preventDefault();
+            closeDetail();
         }
     });
 
