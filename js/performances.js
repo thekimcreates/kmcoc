@@ -524,7 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return promise;
     }
 
-    function loadAndDecodeImage(image, source, timeoutMs = 0) {
+    function loadAndDecodeImage(image, source, timeoutMs = 0, requireDecode = false) {
         return new Promise((resolve, reject) => {
             let settled = false;
             let timer;
@@ -541,7 +541,14 @@ document.addEventListener("DOMContentLoaded", () => {
             image.onload = async () => {
                 try {
                     if (typeof image.decode === "function") await image.decode();
-                } catch (_) { /* The load event still guarantees the transfer completed. */ }
+                } catch (error) {
+                    if (requireDecode) return finish(error);
+                    // Thumbnails may still use a completed load on browsers
+                    // whose optional decode() rejects a usable image.
+                }
+                if (requireDecode && (!image.complete || !image.naturalWidth || !image.naturalHeight)) {
+                    return finish(new Error("The full gallery image is not ready to display."));
+                }
                 finish();
             };
             image.onerror = () => finish(new Error("This gallery image could not be loaded."));
@@ -743,16 +750,20 @@ document.addEventListener("DOMContentLoaded", () => {
             image.className = "performance-gallery-progressive-full";
             image.alt = item.name || "Performance gallery photo";
             image.decoding = "async";
-            galleryViewerMedia.appendChild(image);
+            image.loading = "eager";
+            // Decode off-DOM: even a direct URL fallback can never paint
+            // progressive/partial image data over the lightweight preview.
             (async () => {
                 try {
                     // response.blob() resolves only after every byte has arrived.
                     // Keep the thumbnail visible through both transfer and decode.
                     const source = await cachedImageSource(item.url, GALLERY_CACHE_NAMES.fullImages);
-                    await loadAndDecodeImage(image, source);
-                    if (loadToken !== activeGalleryLoadToken) return;
+                    await loadAndDecodeImage(image, source, 0, true);
+                    if (loadToken !== activeGalleryLoadToken || !previewLayer.isConnected) return;
                     image.classList.add("is-loaded");
-                    previewLayer.remove();
+                    // Replace in one DOM operation after transfer AND decode.
+                    // Both layers occupy the same fitted viewport box.
+                    previewLayer.replaceWith(image);
                 } catch (error) {
                     console.warn("Unable to load full gallery image:", error);
                 }
