@@ -753,7 +753,8 @@ body.performance-gallery-viewer-open {
 .performance-gallery-progressive-preview.is-faded { opacity:0; }
 .performance-gallery-progressive-full,.performance-gallery-streaming-video { z-index:5; }
 .performance-gallery-progressive-full { opacity:0; visibility:hidden; }
-.performance-gallery-progressive-full.is-loaded { opacity:1; visibility:visible; }
+.performance-gallery-progressive-full.is-loaded { opacity:1; visibility:inherit; }
+.performance-gallery-viewer.is-shared-transitioning .performance-gallery-progressive-full { opacity:0; visibility:hidden; }
 .performance-gallery-streaming-video { opacity:0; }
 .performance-gallery-streaming-video.is-loaded { opacity:1; }
 .performance-gallery-viewer-close,.performance-gallery-viewer-navigation { z-index:4; display:grid; width:48px; height:48px; padding:0 0 5px; place-items:center; border:1px solid rgba(20,20,20,.12); border-radius:50%; background:rgba(255,255,255,.94); color:#171717; box-shadow:0 8px 28px rgba(0,0,0,.25); font-size:2.15rem; line-height:1; cursor:pointer; opacity:0; transition:opacity .18s ease, transform .18s ease, background .18s ease; }

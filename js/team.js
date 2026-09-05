@@ -5,7 +5,7 @@
     const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
 
     const fallback = {
-        heroImageUrl: "assets/team/team-hero.jpg",
+        heroImageUrl: "assets/team/team-hero.webp",
         instructorImageUrl: "assets/team/instructor.webp",
         instructorName: "Susanna Hong",
         instructorKoreanName: "홍수잔나",

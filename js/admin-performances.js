@@ -510,9 +510,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.warn("The old gallery preview could not be recovered; rebuilding it from the original media:", error);
             }
         }
-        return isVideoFile(item)
-            ? createVideoThumbnail(item.url, item)
-            : createImageThumbnail(item.url);
+        if (isVideoFile(item)) return createVideoThumbnail(item.url, item);
+        try {
+            return await createImageThumbnail(item.url);
+        } catch (error) {
+            if (!item.path || !storage) throw error;
+            const refreshed = await storage.ref(item.path).getDownloadURL();
+            return createImageThumbnail(refreshed);
+        }
     }
 
     async function uploadGalleryThumbnail(documentId, thumbnail, token) {
@@ -583,9 +588,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 const repairedCount = repaired.filter(item => item.thumbnailDataUrl).length;
                 const originalCount = items.filter(item => item.thumbnailDataUrl).length;
                 if (repairedCount > originalCount) {
-                    await db.collection("performances").doc(record.id).update({
-                        galleryItems: sortGalleryItems(repaired),
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    const reference = db.collection("performances").doc(record.id);
+                    await db.runTransaction(async transaction => {
+                        const snapshot = await transaction.get(reference);
+                        if (!snapshot.exists) return;
+                        const current = snapshot.data().galleryItems || [];
+                        let changed = false;
+                        const merged = current.map(item => {
+                            if (item.thumbnailDataUrl) return item;
+                            const preview = repaired.find(candidate => candidate.url === item.url && candidate.path === item.path && candidate.thumbnailDataUrl);
+                            if (!preview) return item;
+                            changed = true;
+                            // Merge only preview fields, preserving concurrent edits/deletions.
+                            const fields = {};
+                            for (const key of ["thumbnailDataUrl", "thumbnailUrl", "thumbnailPath", "thumbnailWidth", "thumbnailHeight"]) {
+                                if (preview[key] !== undefined) fields[key] = preview[key];
+                            }
+                            return { ...item, ...fields };
+                        });
+                        if (changed) transaction.update(reference, {
+                            galleryItems: merged,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
                     });
                 }
             }

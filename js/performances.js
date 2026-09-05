@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeGalleryLoadToken = 0;
     let activeGalleryIndex = -1;
     let galleryTransitioning = false;
+    let galleryOpeningReady = Promise.resolve();
+    let finishGalleryOpening = null;
     const selectedArrangements = new Set();
     const CACHE_KEYS = {
         performances: "kmc-public-performances-v2",
@@ -516,9 +518,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }).catch((error) => {
             console.warn("Unable to create a lightweight preview for this legacy gallery item:", error);
             // Keep the spinner on failure. Allow another gallery opening to
-            // retry instead of memoizing a failed video preview for this visit.
-            if (isGalleryVideo(item)) galleryLegacyPreviewPromises.delete(url);
-            return isGalleryVideo(item) ? "" : url;
+            // retry instead of memoizing a failed preview for this visit.
+            // Never use an uncompressed original as the low-quality preview.
+            galleryLegacyPreviewPromises.delete(url);
+            return "";
         });
         galleryLegacyPreviewPromises.set(url, promise);
         return promise;
@@ -684,6 +687,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function hideGalleryViewerImmediately() {
         stopActiveGalleryVideo();
+        finishGalleryOpening?.();
+        finishGalleryOpening = null;
+        galleryOpeningReady = Promise.resolve();
         galleryViewer.classList.remove("is-visible");
         galleryViewer.classList.remove("is-content-visible");
         galleryViewer.classList.remove("is-shared-transitioning");
@@ -737,6 +743,7 @@ document.addEventListener("DOMContentLoaded", () => {
         stopActiveGalleryVideo();
         activeGalleryIndex = index;
         const loadToken = activeGalleryLoadToken;
+        const openingReady = galleryOpeningReady;
         galleryViewerMedia.replaceChildren();
         const previewLayer = document.createElement("div");
         previewLayer.className = "performance-gallery-progressive-preview";
@@ -759,6 +766,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     // Keep the thumbnail visible through both transfer and decode.
                     const source = await cachedImageSource(item.url, GALLERY_CACHE_NAMES.fullImages);
                     await loadAndDecodeImage(image, source, 0, true);
+                    await openingReady;
                     if (loadToken !== activeGalleryLoadToken || !previewLayer.isConnected) return;
                     image.classList.add("is-loaded");
                     // Replace in one DOM operation after transfer AND decode.
@@ -903,6 +911,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!item || galleryTransitioning) return;
         if (!galleryViewer.hidden) return selectGalleryItem(index);
         galleryTransitioning = true;
+        galleryOpeningReady = new Promise(resolve => { finishGalleryOpening = resolve; });
         galleryViewer.hidden = false;
         galleryViewer.classList.add("is-shared-transitioning");
         galleryModal.classList.add("is-viewing");
@@ -928,6 +937,10 @@ document.addEventListener("DOMContentLoaded", () => {
             galleryViewer.classList.remove("is-shared-transitioning");
             galleryViewer.classList.add("is-visible");
             galleryViewer.classList.add("is-content-visible");
+            // Let the fully expanded preview paint before revealing a decoded original.
+            await waitForAnimationFrames(2);
+            finishGalleryOpening?.();
+            finishGalleryOpening = null;
             galleryTransitioning = false;
             galleryViewerClose.focus({ preventScroll: true });
         }
@@ -961,6 +974,8 @@ document.addEventListener("DOMContentLoaded", () => {
     async function closeGalleryViewer() {
         if (galleryViewer.hidden || galleryTransitioning) return;
         galleryTransitioning = true;
+        // A late image decode must not replace the outgoing thumbnail proxy.
+        activeGalleryLoadToken += 1;
         galleryViewerMedia.getAnimations?.().forEach(animation => animation.cancel());
         galleryViewerMedia.style.opacity = "1";
         galleryViewerMedia.style.transform = "none";

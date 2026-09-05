@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingTeacherImage = null;
   let savedTimer = null;
 
-  const fallback = { heroImageUrl:"assets/team/team-hero.jpg", instructorImageUrl:"assets/team/instructor.webp", instructorName:"Susanna Hong", instructorKoreanName:"홍수잔나", teacherMessageKo:"", teacherMessageEn:"", members:[] };
+  const fallback = { heroImageUrl:"assets/team/team-hero.webp", instructorImageUrl:"assets/team/instructor.webp", instructorName:"Susanna Hong", instructorKoreanName:"홍수잔나", teacherMessageKo:"", teacherMessageEn:"", members:[] };
   const redirect = () => location.replace("login.html");
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `member-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const setStatus = (message="", type="") => { status.textContent=message; status.className="login-status"; if(type) status.classList.add(`is-${type}`); };
