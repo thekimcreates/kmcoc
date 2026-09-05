@@ -329,7 +329,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function createGalleryPlaceholder(item) {
         const placeholder = document.createElement("span");
         placeholder.className = "performance-gallery-placeholder";
-        placeholder.textContent = isGalleryVideo(item) ? "Video" : "Photo";
+        const spinner = document.createElement("span");
+        spinner.className = "performance-gallery-loader";
+        placeholder.appendChild(spinner);
         placeholder.setAttribute("aria-hidden", "true");
         return placeholder;
     }
