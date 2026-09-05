@@ -442,6 +442,7 @@ document.addEventListener("DOMContentLoaded", () => {
         stopActiveGalleryVideo();
         galleryViewer.classList.remove("is-visible");
         galleryViewer.classList.remove("is-content-visible");
+        galleryViewer.classList.remove("is-shared-transitioning");
         galleryModal?.classList.remove("is-viewing");
         document.body.classList.remove("performance-gallery-viewer-open");
         galleryViewer.hidden = true;
@@ -507,9 +508,8 @@ document.addEventListener("DOMContentLoaded", () => {
             galleryViewerMedia.appendChild(image);
             image.addEventListener("load", () => {
                 if (loadToken !== activeGalleryLoadToken) return;
-                image.style.opacity = "1";
                 image.classList.add("is-loaded");
-                previewLayer.classList.add("is-faded");
+                previewLayer.remove();
             }, { once: true });
             image.src = item.url;
             return;
@@ -517,7 +517,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const video = document.createElement("video");
         video.className = "performance-gallery-streaming-video";
-        video.style.opacity = "1";
         video.playsInline = true;
         video.preload = "auto";
         thumbnail.promise.then((url) => {
@@ -547,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
         video.addEventListener("playing", () => {
             if (loadToken === activeGalleryLoadToken) {
                 video.classList.add("is-loaded");
-                previewLayer.classList.add("is-faded");
+                previewLayer.remove();
             }
         });
         galleryVideoToggle.onclick = () => video.paused ? video.play() : video.pause();
@@ -639,6 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!galleryViewer.hidden) return selectGalleryItem(index);
         galleryTransitioning = true;
         galleryViewer.hidden = false;
+        galleryViewer.classList.add("is-shared-transitioning");
         galleryModal.classList.add("is-viewing");
         document.body.classList.add("performance-gallery-viewer-open");
         renderGalleryFilmstrip();
@@ -659,6 +659,7 @@ document.addEventListener("DOMContentLoaded", () => {
             galleryViewerMedia.getAnimations?.().forEach(animation => animation.cancel());
             galleryViewerMedia.style.opacity = "1";
             galleryViewerMedia.style.transform = "none";
+            galleryViewer.classList.remove("is-shared-transitioning");
             galleryViewer.classList.add("is-visible");
             galleryViewer.classList.add("is-content-visible");
             galleryTransitioning = false;
@@ -709,6 +710,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const shared = createSharedMediaProxy(tile, item);
             proxy = shared.proxy;
             const from = containedMediaRect(item, shared.sourceVisual);
+            galleryViewer.classList.add("is-shared-transitioning");
             galleryViewer.classList.remove("is-content-visible");
             galleryViewer.classList.remove("is-visible");
             if (target?.width && target?.height) await animateSharedMedia(proxy, from, target, false);
