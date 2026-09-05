@@ -313,8 +313,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }).format(date);
     }
 
-    function galleryThumbnailFor(item) {
-        return item?.thumbnailUrl || item?.thumbnailURL || item?.thumbUrl || item?.previewUrl || item?.thumbnailDataUrl || "";
+    function galleryThumbnailCandidates(item) {
+        return [
+            item?.thumbnailDataUrl,
+            item?.thumbnailUrl,
+            item?.thumbnailURL,
+            item?.thumbUrl,
+            item?.previewUrl
+        ].map(value => String(value || "").trim()).filter((value, index, values) => value && values.indexOf(value) === index);
     }
 
     function createGalleryPlaceholder(item) {
@@ -369,39 +375,40 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    async function resolveGalleryThumbnail(item) {
-        const direct = galleryThumbnailFor(item);
-        if (direct) return cachedImageSource(direct, GALLERY_CACHE_NAMES.thumbnails);
+    async function resolveGalleryThumbnails(item) {
+        const candidates = galleryThumbnailCandidates(item);
         if (item?.thumbnailPath && storage) {
             try {
                 const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
-                return cachedImageSource(refreshed, GALLERY_CACHE_NAMES.thumbnails);
+                if (refreshed && !candidates.includes(refreshed)) candidates.push(refreshed);
             } catch (error) {
                 console.warn("Unable to load gallery preview:", error);
             }
         }
-        return "";
+        return candidates;
     }
 
     function attachGalleryThumbnail(container, item, className = "") {
         const placeholder = createGalleryPlaceholder(item);
         if (className) placeholder.classList.add(className);
         container.appendChild(placeholder);
-        const promise = resolveGalleryThumbnail(item).then(async (url) => {
-            if (!url) return "";
-            const image = document.createElement("img");
-            image.alt = "";
-            image.decoding = "async";
-            image.loading = "lazy";
-            if (className) image.classList.add(className);
-            try {
-                await loadAndDecodeImage(image, url);
-                if (placeholder.isConnected) placeholder.replaceWith(image);
-            } catch (error) {
-                console.warn("Unable to display gallery thumbnail:", error);
-                return "";
+        const promise = resolveGalleryThumbnails(item).then(async (candidates) => {
+            for (const candidate of candidates) {
+                const image = document.createElement("img");
+                image.alt = "";
+                image.decoding = "async";
+                image.loading = "lazy";
+                if (className) image.classList.add(className);
+                try {
+                    const source = await cachedImageSource(candidate, GALLERY_CACHE_NAMES.thumbnails);
+                    await loadAndDecodeImage(image, source);
+                    if (placeholder.isConnected) placeholder.replaceWith(image);
+                    return source;
+                } catch (error) {
+                    console.warn("Unable to display a gallery thumbnail candidate:", error);
+                }
             }
-            return url;
+            return "";
         });
         return { placeholder, promise };
     }

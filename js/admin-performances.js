@@ -431,18 +431,67 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    async function uploadGalleryThumbnail(documentId, thumbnail, token) {
-        const path = `performance-highlights/${documentId}/gallery-thumb-${Date.now()}-${token}.${thumbnail.extension}`;
-        const snapshot = await storage.ref(path).put(thumbnail.blob, {
-            contentType: thumbnail.contentType,
-            cacheControl: "public,max-age=31536000,immutable"
+    function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("The gallery preview could not be saved."));
+            reader.readAsDataURL(blob);
         });
-        return {
-            thumbnailUrl: await snapshot.ref.getDownloadURL(),
-            thumbnailPath: path,
+    }
+
+    async function createInlineGalleryThumbnail(thumbnail) {
+        try {
+            const compact = await imageOptimizer.optimize(thumbnail.blob, {
+                maxWidth: 160,
+                maxHeight: 160,
+                quality: 0.45,
+                jpegQuality: 0.5,
+                maxInputBytes: 500 * 1024 * 1024
+            });
+            return blobToDataUrl(compact.blob);
+        } catch (error) {
+            console.warn("The gallery preview could not be compressed further; using the prepared preview:", error);
+            return blobToDataUrl(thumbnail.blob);
+        }
+    }
+
+    async function createExistingGalleryThumbnail(item) {
+        const savedPreview = item.thumbnailUrl || item.thumbnailURL || item.thumbUrl || item.previewUrl || "";
+        if (savedPreview) {
+            try {
+                return await createImageThumbnail(savedPreview);
+            } catch (error) {
+                console.warn("The old gallery preview could not be recovered; rebuilding it from the original media:", error);
+            }
+        }
+        return isVideoFile(item)
+            ? createVideoThumbnail(item.url)
+            : createImageThumbnail(item.url);
+    }
+
+    async function uploadGalleryThumbnail(documentId, thumbnail, token) {
+        // Keep a tiny preview directly with the gallery record. This remains
+        // available even if an older Firebase Storage preview URL expires or
+        // the site's Storage rules have not yet been updated.
+        const thumbnailDataUrl = await createInlineGalleryThumbnail(thumbnail);
+        const path = `performance-highlights/${documentId}/gallery-thumb-${Date.now()}-${token}.${thumbnail.extension}`;
+        const result = {
+            thumbnailDataUrl,
             thumbnailWidth: Number(thumbnail.width) || 0,
             thumbnailHeight: Number(thumbnail.height) || 0
         };
+        try {
+            const snapshot = await storage.ref(path).put(thumbnail.blob, {
+                contentType: thumbnail.contentType,
+                cacheControl: "public,max-age=31536000,immutable"
+            });
+            result.thumbnailUrl = await snapshot.ref.getDownloadURL();
+            result.thumbnailPath = path;
+        } catch (error) {
+            console.warn("The Storage copy of this gallery preview could not be saved; using the embedded lightweight preview instead:", error);
+        }
+        return result;
     }
 
     async function ensureGalleryThumbnails(documentId, items) {
@@ -454,14 +503,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const index = nextIndex++;
             if (index >= items.length) return;
             const item = items[index];
-            if (item.thumbnailUrl) {
+            if (item.thumbnailDataUrl) {
                 nextItems[index] = item;
             } else {
                 try {
                     setStatus(`Preparing gallery previews… ${completed} of ${items.length} complete`);
-                    const thumbnail = isVideoFile(item)
-                        ? await createVideoThumbnail(item.url)
-                        : await createImageThumbnail(item.url);
+                    const thumbnail = await createExistingGalleryThumbnail(item);
                     const uploaded = await uploadGalleryThumbnail(documentId, thumbnail, `existing-${index}`);
                     nextItems[index] = { ...item, ...uploaded };
                 } catch (error) {
@@ -484,12 +531,12 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             for (const record of records) {
                 const items = Array.isArray(record.galleryItems) ? record.galleryItems : [];
-                const needsRepair = items.some(item => item?.url && !item.thumbnailUrl);
+                const needsRepair = items.some(item => item?.url && !item.thumbnailDataUrl);
                 if (!record.id || !needsRepair || thumbnailRepairAttempted.has(record.id)) continue;
                 thumbnailRepairAttempted.add(record.id);
                 const repaired = await ensureGalleryThumbnails(record.id, items);
-                const repairedCount = repaired.filter(item => item.thumbnailUrl).length;
-                const originalCount = items.filter(item => item.thumbnailUrl).length;
+                const repairedCount = repaired.filter(item => item.thumbnailDataUrl).length;
+                const originalCount = items.filter(item => item.thumbnailDataUrl).length;
                 if (repairedCount > originalCount) {
                     await db.collection("performances").doc(record.id).update({
                         galleryItems: sortGalleryItems(repaired),
