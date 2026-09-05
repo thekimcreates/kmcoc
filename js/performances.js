@@ -332,14 +332,42 @@ document.addEventListener("DOMContentLoaded", () => {
     async function resolveGalleryThumbnail(item) {
         const direct = galleryThumbnailFor(item);
         if (direct && await thumbnailLoads(direct)) return direct;
-        if (!item?.thumbnailPath || !storage) return "";
-        try {
-            const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
-            return await thumbnailLoads(refreshed) ? refreshed : "";
-        } catch (error) {
-            console.warn("Unable to load gallery preview:", error);
-            return "";
+        if (item?.thumbnailPath && storage) {
+            try {
+                const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
+                if (await thumbnailLoads(refreshed)) return refreshed;
+            } catch (error) {
+                console.warn("Unable to load gallery preview:", error);
+            }
         }
+        // Older gallery records predate generated previews. Until the admin
+        // page repairs those records, use the original photo so the gallery
+        // never becomes a wall of permanent placeholders.
+        if (!isGalleryVideo(item) && item?.url && await thumbnailLoads(item.url)) return item.url;
+        return "";
+    }
+
+    function attachGalleryVideoFrame(container, item, placeholder, className = "") {
+        const video = document.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        video.setAttribute("aria-hidden", "true");
+        if (className) video.classList.add(className);
+        let revealed = false;
+        const reveal = () => {
+            if (revealed || !placeholder.isConnected) return;
+            revealed = true;
+            placeholder.replaceWith(video);
+        };
+        video.addEventListener("loadeddata", reveal, { once: true });
+        video.addEventListener("loadedmetadata", () => {
+            if (Number.isFinite(video.duration) && video.duration > 0.06) {
+                try { video.currentTime = Math.min(0.06, video.duration / 10); } catch (_) { /* Keep the first frame. */ }
+            }
+        }, { once: true });
+        video.addEventListener("seeked", reveal, { once: true });
+        video.src = item.url;
     }
 
     function attachGalleryThumbnail(container, item, className = "") {
@@ -347,7 +375,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (className) placeholder.classList.add(className);
         container.appendChild(placeholder);
         const promise = resolveGalleryThumbnail(item).then((url) => {
-            if (!url) return "";
+            if (!url) {
+                if (isGalleryVideo(item) && item?.url) attachGalleryVideoFrame(container, item, placeholder, className);
+                return "";
+            }
             const image = document.createElement("img");
             image.src = url;
             image.alt = "";
@@ -589,7 +620,15 @@ document.addEventListener("DOMContentLoaded", () => {
             easing: "cubic-bezier(.22,1,.36,1)",
             fill: "forwards"
         });
-        try { await animation.finished; } catch (_) { /* Animation was interrupted. */ }
+        let timeoutId = 0;
+        const timeout = new Promise(resolve => {
+            timeoutId = window.setTimeout(resolve, 560);
+        });
+        try {
+            await Promise.race([animation.finished.catch(() => undefined), timeout]);
+        } finally {
+            window.clearTimeout(timeoutId);
+        }
     }
 
     async function openGalleryViewer(index, sourceTile = null) {
@@ -604,16 +643,22 @@ document.addEventListener("DOMContentLoaded", () => {
         renderExpandedGalleryItem(index);
         await waitForAnimationFrames(2);
 
-        const tile = sourceTile || galleryGrid.querySelector(`[data-gallery-index="${index}"]`);
-        const from = tile?.getBoundingClientRect();
-        const { proxy, sourceVisual } = createSharedMediaProxy(tile, item);
-        const to = containedMediaRect(item, sourceVisual);
-        galleryViewer.classList.add("is-visible");
-        if (from?.width && from?.height) await animateSharedMedia(proxy, from, to, true);
-        proxy.remove();
-        galleryViewer.classList.add("is-content-visible");
-        galleryTransitioning = false;
-        galleryViewerClose.focus({ preventScroll: true });
+        let proxy = null;
+        try {
+            const tile = sourceTile || galleryGrid.querySelector(`[data-gallery-index="${index}"]`);
+            const from = tile?.getBoundingClientRect();
+            const shared = createSharedMediaProxy(tile, item);
+            proxy = shared.proxy;
+            const to = containedMediaRect(item, shared.sourceVisual);
+            galleryViewer.classList.add("is-visible");
+            if (from?.width && from?.height) await animateSharedMedia(proxy, from, to, true);
+        } finally {
+            proxy?.remove();
+            galleryViewer.classList.add("is-visible");
+            galleryViewer.classList.add("is-content-visible");
+            galleryTransitioning = false;
+            galleryViewerClose.focus({ preventScroll: true });
+        }
     }
 
     async function selectGalleryItem(index) {
@@ -643,16 +688,21 @@ document.addEventListener("DOMContentLoaded", () => {
         tile?.scrollIntoView({ block: "nearest", inline: "nearest" });
         await waitForAnimationFrames(2);
 
-        const target = tile?.getBoundingClientRect();
-        const { proxy, sourceVisual } = createSharedMediaProxy(tile, item);
-        const from = containedMediaRect(item, sourceVisual);
-        galleryViewer.classList.remove("is-content-visible");
-        galleryViewer.classList.remove("is-visible");
-        if (target?.width && target?.height) await animateSharedMedia(proxy, from, target, false);
-        else await new Promise(resolve => window.setTimeout(resolve, 420));
-        proxy.remove();
-        hideGalleryViewerImmediately();
-        tile?.focus({ preventScroll: true });
+        let proxy = null;
+        try {
+            const target = tile?.getBoundingClientRect();
+            const shared = createSharedMediaProxy(tile, item);
+            proxy = shared.proxy;
+            const from = containedMediaRect(item, shared.sourceVisual);
+            galleryViewer.classList.remove("is-content-visible");
+            galleryViewer.classList.remove("is-visible");
+            if (target?.width && target?.height) await animateSharedMedia(proxy, from, target, false);
+            else await new Promise(resolve => window.setTimeout(resolve, 420));
+        } finally {
+            proxy?.remove();
+            hideGalleryViewerImmediately();
+            tile?.focus({ preventScroll: true });
+        }
     }
 
     function openGallery(record, initialIndex = null, sourceTile = null) {
