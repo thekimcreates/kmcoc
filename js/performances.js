@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let finishGalleryOpening = null;
     const selectedArrangements = new Set();
     const CACHE_KEYS = {
-        performances: "kmc-public-performances-v2",
+        performances: "kmc-public-performances-v3",
         arrangements: "kmc-public-performance-arrangements-v2",
         members: "kmc-public-performance-members-v2"
     };
@@ -90,6 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function writeCache(key, data) {
+        if (key === CACHE_KEYS.performances) data = data.map(({ galleryItems, ...record }) => ({ ...record, _summaryOnly: true }));
         try {
             localStorage.setItem(key, JSON.stringify({
                 savedAt: Date.now(),
@@ -653,7 +654,33 @@ document.addEventListener("DOMContentLoaded", () => {
         return tile;
     }
 
+    let galleryDetailRequest = 0;
     function renderGallery(record) {
+        const request = ++galleryDetailRequest;
+        if (record._summaryOnly) {
+            gallerySection.hidden = false;
+            galleryShowAll.hidden = true;
+            const message = document.createElement("p");
+            message.textContent = "Loading gallery…";
+            message.setAttribute("role", "status");
+            galleryPreview.replaceChildren(message);
+            window.KMCPerformanceList.detail(record).then(full => {
+                if (request !== galleryDetailRequest || activeRecord?.id !== record.id || detail.classList.contains("is-closing")) return;
+                activeRecord = full;
+                renderGallery(full);
+            }).catch(error => {
+                if (request !== galleryDetailRequest || activeRecord?.id !== record.id) return;
+                message.textContent = "The gallery could not be loaded. ";
+                const retry = document.createElement("button");
+                retry.type = "button";
+                retry.textContent = "Try again";
+                retry.addEventListener("click", () => renderGallery(record));
+                message.appendChild(retry);
+                console.warn("Unable to load this performance gallery:", error);
+            });
+            return;
+        }
+        galleryShowAll.hidden = false;
         const items = galleryItemsFor(record);
         gallerySection.hidden = items.length === 0;
         galleryPreview.replaceChildren();
@@ -1470,6 +1497,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Retire the old full-gallery caches so thumbnails cannot exhaust localStorage.
+    try {
+        localStorage.removeItem("kmc-public-performances-v2");
+        localStorage.removeItem("kmc-shared-data-v2:performances");
+    } catch (_) { /* Storage may be unavailable in private browsing. */ }
     const cachedPerformances = readCache(CACHE_KEYS.performances);
     arrangementRecords = readCache(CACHE_KEYS.arrangements);
     memberRecords = readCache(CACHE_KEYS.members);
@@ -1485,7 +1517,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const startBackgroundLoad = () => {
-        const performancesRequest = dataStore.getPerformances();
+        const performancesRequest = window.KMCPerformanceList.list();
         const arrangementRequest = dataStore.getArrangements();
         const teamRequest = dataStore.getTeam();
 
