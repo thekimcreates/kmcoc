@@ -90,6 +90,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const galleryInput = get("performance-gallery");
     const galleryList = get("performance-gallery-list");
     const gallerySummary = get("performance-gallery-summary");
+    const galleryDownloadButton = get("performance-gallery-download");
+    const zipDialog = get("gallery-zip-dialog");
+    const zipYes = get("gallery-zip-yes");
+    const zipNo = get("gallery-zip-no");
+    const zipDownload = get("gallery-zip-download");
+    let zipItems = [], zipRecord = null, zipController = null;
+    let zipBusy = false, zipRun = 0, zipObjectUrl = "";
     const linksTbd = get("performance-links-tbd");
     const linksList = get("performance-links-list");
     const addLinkButton = get("performance-link-add");
@@ -129,6 +136,119 @@ document.addEventListener("DOMContentLoaded", () => {
         status.className = "login-status";
         if (type) status.classList.add(`is-${type}`);
     }
+
+    function releaseZipDownload() {
+        if (!zipObjectUrl) return;
+        const url = zipObjectUrl;
+        zipObjectUrl = "";
+        zipDownload.removeAttribute("href");
+        // Leave time for the browser to take ownership of a triggered download.
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    function closeZipDialog() {
+        zipController?.abort();
+        zipRun += 1;
+        zipBusy = false;
+        zipDialog.close();
+        releaseZipDownload();
+        galleryDownloadButton.focus({ preventScroll: true });
+    }
+
+    galleryDownloadButton.addEventListener("click", () => {
+        if (submitButton.disabled || zipBusy) return;
+        zipItems = sortGalleryItems([
+            ...galleryItems.map(item => ({ ...item })),
+            ...pendingGalleryFiles.map(item => ({ ...item }))
+        ]);
+        if (!zipItems.length) return;
+        zipRecord = {
+            locationTbd: locationTbd.checked,
+            locationName: get("performance-location-name").value || locationInput.value.trim(),
+            date: dateInput.value
+        };
+        releaseZipDownload();
+        get("gallery-zip-title").textContent = window.KMCGalleryZip?.galleryTitle(zipRecord) || "Download gallery";
+        get("gallery-zip-description").textContent = `Download all ${zipItems.length} gallery files currently listed in this editor as a ZIP?`;
+        get("gallery-zip-description").hidden = false;
+        get("gallery-zip-progress-wrap").hidden = true;
+        get("gallery-zip-status").textContent = "";
+        get("gallery-zip-status").className = "";
+        zipYes.hidden = false;
+        zipYes.textContent = "Yes";
+        zipNo.textContent = "No";
+        zipDownload.hidden = true;
+        zipDialog.showModal();
+        zipNo.focus();
+    });
+
+    zipNo.addEventListener("click", closeZipDialog);
+    zipDialog.addEventListener("cancel", event => {
+        event.preventDefault();
+        if (!zipBusy) closeZipDialog();
+    });
+    zipYes.addEventListener("click", async () => {
+        if (zipBusy) return;
+        const run = ++zipRun;
+        zipBusy = true;
+        zipController = new AbortController();
+        get("gallery-zip-description").hidden = true;
+        get("gallery-zip-progress-wrap").hidden = false;
+        const progress = get("gallery-zip-progress");
+        const progressPercent = get("gallery-zip-percent");
+        const progressCount = get("gallery-zip-count");
+        const progressPhase = get("gallery-zip-phase");
+        const progressStatus = get("gallery-zip-status");
+        progress.value = 0;
+        progressPercent.textContent = "0%";
+        progressCount.textContent = `0 of ${zipItems.length}`;
+        progressPhase.textContent = "Preparing files…";
+        progressStatus.className = "";
+        progressStatus.textContent = "";
+        zipYes.hidden = true;
+        zipNo.textContent = "Cancel";
+        zipNo.focus();
+        try {
+            if (!window.KMCGalleryZip) throw new Error("The ZIP download could not start. Refresh the page and try again.");
+            const blob = await window.KMCGalleryZip.create(zipItems, {
+                storage, signal: zipController.signal,
+                onProgress: ({ processed, total, percent, phase }) => {
+                    if (run !== zipRun) return;
+                    progress.value = percent;
+                    progressPercent.textContent = `${percent}%`;
+                    progressCount.textContent = `${processed} of ${total}`;
+                    progressPhase.textContent = phase === "zip" ? "Preparing ZIP…" : "Processing files…";
+                }
+            });
+            if (run !== zipRun) return;
+            zipObjectUrl = URL.createObjectURL(blob);
+            zipDownload.href = zipObjectUrl;
+            zipDownload.download = window.KMCGalleryZip.filename(zipRecord);
+            zipDownload.hidden = false;
+            zipDownload.click();
+            progress.value = 100;
+            progressPercent.textContent = "100%";
+            progressCount.textContent = `${zipItems.length} of ${zipItems.length}`;
+            progressPhase.textContent = "ZIP ready";
+            progressStatus.textContent = "Complete";
+            progressStatus.className = "is-success";
+            zipNo.textContent = "Done";
+        } catch (error) {
+            if (run !== zipRun || error.name === "AbortError") return;
+            progressStatus.textContent = error.message || "The ZIP could not be prepared. Please try again.";
+            progressStatus.className = "is-error";
+            zipYes.textContent = "Try Again";
+            zipYes.hidden = false;
+            zipNo.textContent = "Close";
+        } finally {
+            if (run === zipRun) zipBusy = false;
+        }
+    });
+    window.addEventListener("beforeunload", event => {
+        if (!zipBusy) return;
+        event.preventDefault();
+        event.returnValue = "";
+    });
 
     function setGroupDisabled(containerId, disabled) {
         const container = get(containerId);
@@ -419,7 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return result;
     }
 
-    async function ensureGalleryThumbnails(documentId, items) {
+    async function ensureGalleryThumbnails(documentId, items, reportProgress = true) {
         const nextItems = new Array(items.length);
         let nextIndex = 0;
         let completed = 0;
@@ -432,7 +552,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 nextItems[index] = item;
             } else {
                 try {
-                    setStatus(`Preparing gallery previews… ${completed} of ${items.length} complete`);
+                    if (reportProgress) setStatus(`Preparing gallery previews… ${completed} of ${items.length} complete`);
                     const thumbnail = await createExistingGalleryThumbnail(item);
                     const uploaded = await uploadGalleryThumbnail(documentId, thumbnail, `existing-${index}`);
                     nextItems[index] = { ...item, ...uploaded };
@@ -459,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const needsRepair = items.some(item => item?.url && !item.thumbnailDataUrl);
                 if (!record.id || !needsRepair || thumbnailRepairAttempted.has(record.id)) continue;
                 thumbnailRepairAttempted.add(record.id);
-                const repaired = await ensureGalleryThumbnails(record.id, items);
+                const repaired = await ensureGalleryThumbnails(record.id, items, false);
                 const repairedCount = repaired.filter(item => item.thumbnailDataUrl).length;
                 const originalCount = items.filter(item => item.thumbnailDataUrl).length;
                 if (repairedCount > originalCount) {
@@ -477,6 +597,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderGalleryFiles() {
+        galleryDownloadButton.hidden = !idInput.value;
+        galleryDownloadButton.disabled = submitButton.disabled || !(galleryItems.length + pendingGalleryFiles.length);
         const items = sortGalleryItems([
             ...galleryItems.map((item, index) => ({ ...item, source: "saved", index })),
             ...pendingGalleryFiles.map((item, index) => ({ ...item, source: "pending", index }))
@@ -901,6 +1023,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!linksTbd.checked && links.some((link) => !link.label || !link.url)) return setStatus("Each external link needs both a name and URL.", "error");
 
         submitButton.disabled = true;
+        galleryDownloadButton.disabled = true;
         cancelButton.disabled = true;
         setStatus(documentId ? "Saving changes…" : "Adding performance…");
 
@@ -981,6 +1104,7 @@ document.addEventListener("DOMContentLoaded", () => {
             setStatus(error.message || "The performance could not be saved.", "error");
         } finally {
             submitButton.disabled = false;
+            galleryDownloadButton.disabled = !(galleryItems.length + pendingGalleryFiles.length);
             cancelButton.disabled = false;
         }
     });

@@ -2745,3 +2745,62 @@ body[data-admin-page="team"] .admin-dashboard-main,
         background: rgba(255, 255, 255, 0.045);
     }
 }
+
+/* Gallery ZIP download and inline performance save status. */
+.performance-save-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1 1 280px;
+    min-width: 0;
+}
+.performance-save-group #performance-submit { flex: 0 0 auto; width: auto; }
+.performance-save-group .login-status { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.performance-save-group .login-status:empty { display: none; }
+.gallery-zip-dialog {
+    width: min(480px, calc(100vw - 32px));
+    max-height: calc(100dvh - 40px);
+    box-sizing: border-box;
+    overflow: auto;
+    padding: 30px;
+    border: 1px solid rgba(22,22,22,.1);
+    border-radius: 24px;
+    background: #fff;
+    color: #18181b;
+    box-shadow: 0 28px 90px rgba(0,0,0,.28);
+}
+.gallery-zip-dialog::backdrop {
+    background: rgba(15,12,12,.48);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+.gallery-zip-dialog h2 { margin: 0 0 14px; font-size: 1.35rem; line-height: 1.35; overflow-wrap: anywhere; }
+.gallery-zip-dialog p { line-height: 1.55; }
+#gallery-zip-description { color: #666; }
+.gallery-zip-progress-label { display: flex; justify-content: space-between; gap: 12px; margin: 24px 0 10px; font-size: .9rem; }
+#gallery-zip-progress { appearance: none; -webkit-appearance: none; display: block; width: 100%; height: 12px; border: 0; border-radius: 999px; overflow: hidden; background: #e8e5e7; }
+#gallery-zip-progress::-webkit-progress-bar { background: #e8e5e7; border-radius: 999px; }
+#gallery-zip-progress::-webkit-progress-value { background: #7f0020; border-radius: 999px; }
+#gallery-zip-progress::-moz-progress-bar { background: #7f0020; border-radius: 999px; }
+#gallery-zip-count { margin: 10px 0 0; text-align: center; font-variant-numeric: tabular-nums; }
+#gallery-zip-status { margin: 12px 0 0; overflow-wrap: anywhere; }
+#gallery-zip-status:empty { display: none; }
+#gallery-zip-status.is-success { color: #23753c; font-weight: 700; text-align: center; }
+#gallery-zip-status.is-error { color: #a0192f; }
+.gallery-zip-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.gallery-zip-actions .admin-submit, .gallery-zip-actions .admin-secondary-button { width: auto; }
+#gallery-zip-download { text-decoration: none; }
+.gallery-zip-dialog [hidden] { display: none !important; }
+@media (max-width: 600px) {
+    .performance-save-group { gap: 10px; }
+    .performance-save-group #performance-submit { padding-inline: 14px; }
+    .performance-save-group .login-status { font-size: .76rem; }
+    .gallery-zip-dialog { padding: 24px; }
+}
+@media (prefers-color-scheme: dark) {
+    .gallery-zip-dialog { background: #18181b; color: #f5f5f7; border-color: rgba(255,255,255,.12); }
+    #gallery-zip-description { color: #b8b8bf; }
+    #gallery-zip-status.is-success { color: #6dd992; }
+    #gallery-zip-status.is-error { color: #ff98ac; }
+    #gallery-zip-progress, #gallery-zip-progress::-webkit-progress-bar { background: #3b363a; }
+}

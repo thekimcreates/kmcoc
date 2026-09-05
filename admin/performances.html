@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Manage Performances | KMC Samulnori</title>
-    <link rel="stylesheet" href="../css/admin.css?v=20260830about1">
+    <link rel="stylesheet" href="../css/admin.css?v=20260905galleryzip1">
     <link rel="stylesheet" href="../css/admin-mobile-polish.css?v=20260725p3a">
 </head>
 <body data-admin-page="performances">
@@ -162,6 +162,7 @@
                                 <input id="performance-gallery" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" multiple>
                                 <p class="admin-help-text">Choose multiple photos or videos. Videos up to 500 MB are supported.</p>
                             </div>
+                            <button id="performance-gallery-download" class="admin-secondary-button" type="button" hidden>Download all as ZIP</button>
                             <p id="performance-gallery-summary" class="performance-gallery-admin-summary">No gallery items selected.</p>
                             <ul id="performance-gallery-list" class="performance-gallery-admin-list" aria-live="polite"></ul>
                         </fieldset>
@@ -179,10 +180,11 @@
                             </div>
                         </fieldset>
 
-                        <p id="performance-status" class="login-status" role="status" aria-live="polite"></p>
-
                         <div class="performance-form-actions">
-                            <button id="performance-submit" class="admin-submit" type="submit">Add Performance</button>
+                            <div class="performance-save-group">
+                                <button id="performance-submit" class="admin-submit" type="submit">Add Performance</button>
+                                <p id="performance-status" class="login-status" role="status" aria-live="polite"></p>
+                            </div>
                             <button id="performance-cancel" class="admin-secondary-button" type="button" hidden>Cancel Edit</button>
                         </div>
                     </form>
@@ -221,6 +223,22 @@
         </footer>
     </div>
 
+    <dialog id="gallery-zip-dialog" class="gallery-zip-dialog" aria-labelledby="gallery-zip-title" aria-describedby="gallery-zip-description">
+        <h2 id="gallery-zip-title">Download gallery</h2>
+        <p id="gallery-zip-description"></p>
+        <div id="gallery-zip-progress-wrap" hidden>
+            <div class="gallery-zip-progress-label"><span id="gallery-zip-phase">Preparing files…</span><span id="gallery-zip-percent">0%</span></div>
+            <progress id="gallery-zip-progress" max="100" value="0" aria-label="Gallery ZIP progress"></progress>
+            <p id="gallery-zip-count" aria-live="polite" aria-atomic="true">0 of 0</p>
+        </div>
+        <p id="gallery-zip-status" role="status" aria-live="polite"></p>
+        <div class="gallery-zip-actions">
+            <button id="gallery-zip-no" class="admin-secondary-button" type="button">No</button>
+            <button id="gallery-zip-yes" class="admin-submit" type="button">Yes</button>
+            <a id="gallery-zip-download" class="admin-submit" hidden>Download ZIP</a>
+        </div>
+    </dialog>
+
     <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
@@ -228,7 +246,9 @@
     <script src="../js/config.js?v=20260725p3a"></script><script src="../js/firebase.js?v=20260725p3a"></script><script src="../js/site-information.js?v=20260725p3a"></script><script src="../js/admin-tools.js?v=20260725p3a"></script><script src="../js/admin-motion.js?v=20260725p3a"></script>
     
     <script src="../js/image-optimizer.js?v=20260725p3a"></script><script src="../js/video-preview.js?v=20260905firstframe2"></script>
-<script src="../js/admin-performances.js?v=20260905firstframe2"></script>
+    <script src="../js/vendor/jszip.min.js?v=3.10.1"></script>
+    <script src="../js/gallery-zip.js?v=20260905galleryzip1"></script>
+    <script src="../js/admin-performances.js?v=20260905galleryzip1"></script>
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD-MVpD9Qvsag1sJKHblNsBdQXZDXPTbMI&libraries=places&callback=initializeKmcPerformanceMap"></script>
     
 </body>
