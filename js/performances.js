@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
         members: "kmc-public-performance-members-v2"
     };
     const GALLERY_CACHE_NAMES = {
-        thumbnails: "kmc-performance-gallery-thumbnails-v1",
+        thumbnails: "kmc-performance-gallery-thumbnails-v2",
         fullImages: "kmc-performance-gallery-full-images-v1"
     };
     const galleryImageSources = new Map();
@@ -329,9 +329,15 @@ document.addEventListener("DOMContentLoaded", () => {
     function createGalleryPlaceholder(item) {
         const placeholder = document.createElement("span");
         placeholder.className = "performance-gallery-placeholder";
-        const spinner = document.createElement("span");
-        spinner.className = "performance-gallery-loader";
-        placeholder.appendChild(spinner);
+        if (isGalleryVideo(item)) {
+            // A still play symbol while the first-frame image is prepared;
+            // unavailable/unsupported videos must never spin indefinitely.
+            placeholder.innerHTML = '<svg width="32" height="32" viewBox="0 0 32 32" fill="#7f0020" aria-hidden="true"><path d="M11 6v20l16-10z"/></svg>';
+        } else {
+            const spinner = document.createElement("span");
+            spinner.className = "performance-gallery-loader";
+            placeholder.appendChild(spinner);
+        }
         placeholder.setAttribute("aria-hidden", "true");
         return placeholder;
     }
@@ -427,6 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return new Promise((resolve, reject) => {
             const video = document.createElement("video");
             let settled = false;
+            let capturing = false;
             const finish = (error, result) => {
                 if (settled) return;
                 settled = true;
@@ -438,6 +445,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 else resolve(result);
             };
             const capture = async () => {
+                if (settled || capturing || video.readyState < 2 || video.seeking) return;
+                capturing = true;
                 try {
                     const sourceWidth = video.videoWidth;
                     const sourceHeight = video.videoHeight;
@@ -460,23 +469,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             };
             const requestFrame = () => {
-                const target = Number.isFinite(video.duration) && video.duration > 0.08
-                    ? Math.min(0.08, video.duration / 10)
-                    : 0;
-                if (!target) {
-                    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return capture();
-                    video.addEventListener("loadeddata", capture, { once: true });
-                    return;
-                }
-                video.addEventListener("seeked", capture, { once: true });
-                try { video.currentTime = target; } catch (_) { capture(); }
+                // Trigger decoding near time zero without skipping ahead to a
+                // later frame. loadeddata also handles browsers that need no seek.
+                if (video.readyState >= 2) return capture();
+                const target = Number.isFinite(video.duration) && video.duration > 0
+                    ? Math.min(0.001, video.duration / 2) : 0;
+                try { video.currentTime = target; } catch (_) { /* Wait for loadeddata. */ }
             };
             const timeout = window.setTimeout(() => finish(new Error("The video preview took too long to load.")), 20000);
             video.crossOrigin = "anonymous";
             video.muted = true;
             video.playsInline = true;
-            video.preload = "metadata";
+            video.preload = "auto";
             video.addEventListener("loadedmetadata", requestFrame, { once: true });
+            video.addEventListener("loadeddata", capture);
+            video.addEventListener("seeked", capture);
             video.addEventListener("error", () => finish(new Error("This video preview could not be loaded.")), { once: true });
             video.src = url;
             video.load();
@@ -511,8 +518,10 @@ document.addEventListener("DOMContentLoaded", () => {
             let cache = null;
             let cached = null;
             if ("caches" in window) {
-                cache = await window.caches.open(GALLERY_CACHE_NAMES.thumbnails);
-                cached = await cache.match(url);
+                try {
+                    cache = await window.caches.open(GALLERY_CACHE_NAMES.thumbnails);
+                    cached = await cache.match(url);
+                } catch (_) { /* A blocked cache must not prevent frame extraction. */ }
             }
             let preview = null;
             if (cached?.headers.get("x-kmc-gallery-preview") === "1") {
@@ -523,8 +532,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     height: Number(cached.headers.get("x-kmc-preview-height")) || 0
                 };
             } else if (isGalleryVideo(item)) {
-                // This seeks only to the first frame, allowing the browser to
-                // request a small byte range instead of downloading the video.
+                // Stop loading as soon as the first frame has been compressed.
+                // The browser can use byte ranges when the server supports them.
                 preview = await captureGalleryVideoPreview(url);
             } else {
                 // Legacy records were saved without a thumbnail. Download the
@@ -581,25 +590,34 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    async function resolveGalleryThumbnails(item) {
+    async function* resolveGalleryThumbnails(item) {
         const candidates = galleryThumbnailCandidates(item);
+        // Use embedded/saved images before making any Firebase request.
+        yield* candidates;
         if (item?.thumbnailPath && storage) {
+            let timeout;
             try {
-                const refreshed = await storage.ref(item.thumbnailPath).getDownloadURL();
-                if (refreshed && !candidates.includes(refreshed)) candidates.push(refreshed);
+                const refreshed = await Promise.race([
+                    storage.ref(item.thumbnailPath).getDownloadURL(),
+                    new Promise((_, reject) => {
+                        timeout = window.setTimeout(() => reject(new Error("Preview URL lookup timed out.")), 5000);
+                    })
+                ]);
+                if (refreshed && !candidates.includes(refreshed)) yield refreshed;
             } catch (error) {
                 console.warn("Unable to load gallery preview:", error);
+            } finally {
+                window.clearTimeout(timeout);
             }
         }
-        return candidates;
     }
 
     function attachGalleryThumbnail(container, item, className = "") {
         const placeholder = createGalleryPlaceholder(item);
         if (className) placeholder.classList.add(className);
         container.appendChild(placeholder);
-        const promise = resolveGalleryThumbnails(item).then(async (candidates) => {
-            for (const candidate of candidates) {
+        const promise = (async () => {
+            for await (const candidate of resolveGalleryThumbnails(item)) {
                 const image = document.createElement("img");
                 image.alt = "";
                 image.decoding = "async";
@@ -631,6 +649,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.warn("Unable to display the generated gallery preview:", error);
                 }
             }
+            placeholder.replaceChildren();
+            placeholder.textContent = isGalleryVideo(item) ? "▶" : "Preview unavailable";
+            return "";
+        })().catch((error) => {
+            console.warn("Unable to prepare gallery thumbnail:", error);
+            placeholder.replaceChildren();
+            placeholder.textContent = isGalleryVideo(item) ? "▶" : "Preview unavailable";
             return "";
         });
         return { placeholder, promise };
